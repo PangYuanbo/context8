@@ -1,0 +1,23 @@
+# Source files
+src/
+tsconfig.json
+*.ts
+!*.d.ts
+
+# Development
+.git/
+.gitignore
+node_modules/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Documentation
+README.md
+docs/
