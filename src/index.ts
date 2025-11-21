@@ -83,7 +83,7 @@ function createServerInstance() {
     },
     {
       instructions:
-        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities.",
+        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities. When using Context7 passthrough (context7-cached-docs), ALWAYS include a versioned library id (format: /org/project/version)."
     }
   );
 
@@ -564,7 +564,14 @@ ${formattedSolutions}${notFoundMsg}`,
       title: "Context7 Cached Docs",
       description: `Fetch Context7 library docs with local caching. Checks the local cache first; on miss, calls Context7 and stores the result for reuse.
 
-Required: Context7 API key (env CONTEXT7_API_KEY or input).`,
+Requirements:
+- Always provide a VERSIONED library id: format '/org/project/version' (avoid bare '/org/project').
+- Recommended: Context7 API key via env CONTEXT7_API_KEY or input.
+
+Examples:
+- /vercel/next.js/v15.1.8 with topic='routing', page=1
+- /facebook/react/v19.0.0 with topic='hooks', page=1
+- /supabase/supabase-js/v2.45.4 with topic='auth', page=2`,
       inputSchema: {
         context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
         libraryId: z.string().describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
