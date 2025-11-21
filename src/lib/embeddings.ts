@@ -59,6 +59,7 @@ export async function generateSolutionEmbedding(solution: {
   rootCause: string;
   solution: string;
   tags: string[];
+  environmentText?: string;
 }): Promise<number[]> {
   // Combine fields with weights (title and error message are most important)
   const combinedText = [
@@ -69,6 +70,7 @@ export async function generateSolutionEmbedding(solution: {
     solution.rootCause,
     solution.solution.slice(0, 500), // Truncate long solutions
     solution.tags.join(" "),
+    solution.environmentText || "",
   ].join(" ");
 
   return generateEmbedding(combinedText);

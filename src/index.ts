@@ -3,6 +3,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { execSync } from "child_process";
+import { Command } from "commander";
+import { ErrorType } from "./lib/types.js";
 import {
   saveSolution,
   searchSolutions,
@@ -10,19 +15,74 @@ import {
   getSolutionsByIds,
   getSolutionCount,
   getDatabasePath,
+  listSolutions,
+  deleteSolution,
 } from "./lib/database.js";
+import {
+  getCachedContext7Doc,
+  setCachedContext7Doc,
+  getContext7CachePath,
+} from "./lib/context7Cache.js";
+
+const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 
 /**
- * ErrorSolver MCP Server
+ * Context8 MCP Server
  * A local knowledge base for storing and retrieving error solutions with semantic search
  */
+
+function pickDeps(
+  deps?: Record<string, string>,
+  limit: number = 30
+): Record<string, string> | undefined {
+  if (!deps) return undefined;
+  return Object.fromEntries(Object.entries(deps).slice(0, limit));
+}
+
+function collectEnvironmentSnapshot(): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {
+    runtime: {
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+    },
+  };
+
+  try {
+    const pkgJsonPath = join(process.cwd(), "package.json");
+    if (existsSync(pkgJsonPath)) {
+      const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+      snapshot.package = {
+        name: pkg.name,
+        version: pkg.version,
+      };
+      snapshot.dependencies = pickDeps(pkg.dependencies);
+      snapshot.devDependencies = pickDeps(pkg.devDependencies);
+    }
+  } catch (error) {
+    console.error("Failed to collect package metadata:", error);
+  }
+
+  return snapshot;
+}
+
+function hasVersionInfo(env: Record<string, unknown> | undefined): boolean {
+  if (!env) return false;
+  const deps = env.dependencies as Record<string, string> | undefined;
+  const devDeps = env.devDependencies as Record<string, string> | undefined;
+  const values = [
+    ...(deps ? Object.values(deps) : []),
+    ...(devDeps ? Object.values(devDeps) : []),
+  ];
+  return values.some((v) => typeof v === "string" && /\d/.test(v));
+}
 
 // Function to create a new server instance with all ErrorSolver tools registered
 function createServerInstance() {
   const server = new McpServer(
     {
-      name: "ErrorSolver",
-      version: "1.0.0",
+      name: "Context8",
+      version: pkgJson.version,
     },
     {
       instructions:
@@ -116,6 +176,12 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           .describe(
             "Tags for categorization (e.g., ['react', 'typescript', 'hooks', 'nextjs'])"
           ),
+        environment: z
+          .record(z.string(), z.any())
+          .optional()
+          .describe(
+            "Optional environment snapshot (e.g., runtime, dependencies). If omitted, the server captures basic runtime and package metadata."
+          ),
         projectPath: z
           .string()
           .optional()
@@ -124,18 +190,43 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           ),
       },
     },
-    async ({
-      title,
-      errorMessage,
-      errorType,
-      context,
-      rootCause,
-      solution,
-      codeChanges,
-      tags,
-      projectPath,
+    async (params: {
+      title: string;
+      errorMessage: string;
+      errorType: ErrorType;
+      context: string;
+      rootCause: string;
+      solution: string;
+      codeChanges?: string;
+      tags: string[];
+      projectPath?: string;
+      environment?: Record<string, unknown>;
     }) => {
       try {
+        const {
+          title,
+          errorMessage,
+          errorType,
+          context,
+          rootCause,
+          solution,
+          codeChanges,
+          tags,
+          projectPath,
+          environment,
+        } = params;
+
+        const autoEnvironment = collectEnvironmentSnapshot();
+        const mergedEnvironment = environment
+          ? { ...autoEnvironment, ...environment }
+          : autoEnvironment;
+
+        if (!hasVersionInfo(mergedEnvironment)) {
+          throw new Error(
+            "Save aborted: missing library version info. Please include dependency versions (e.g., react, react-dom, typescript) and retry."
+          );
+        }
+
         const savedSolution = await saveSolution({
           title,
           errorMessage,
@@ -146,9 +237,10 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           codeChanges,
           tags,
           projectPath,
+          environment: mergedEnvironment,
         });
 
-        const totalCount = getSolutionCount();
+        const totalCount = await getSolutionCount();
 
         return {
           content: [
@@ -211,12 +303,18 @@ After reviewing the results, use 'batch-get-solutions' to retrieve full details 
           .optional()
           .default(25)
           .describe("Maximum number of results to return (default: 25)"),
+        mode: z
+          .enum(["semantic", "hybrid", "sparse"])
+          .optional()
+          .describe("Search mode: semantic only, sparse (keywords), or hybrid (default)"),
       },
     },
-    async ({ query, limit = 25 }) => {
+    async ({ query, limit = 25, mode }) => {
       try {
-        const results = await searchSolutions(query, limit);
-        const totalCount = getSolutionCount();
+        const results = await searchSolutions(query, limit, {
+          mode: mode || "hybrid",
+        });
+        const totalCount = await getSolutionCount();
 
         if (results.length === 0) {
           return {
@@ -293,7 +391,7 @@ The solution ID is returned by the search-solutions tool.`,
     },
     async ({ solutionId }) => {
       try {
-        const solution = getSolutionById(solutionId);
+        const solution = await getSolutionById(solutionId);
 
         if (!solution) {
           return {
@@ -384,7 +482,7 @@ This is more efficient than calling 'get-solution-detail' multiple times.`,
     },
     async ({ solutionIds }) => {
       try {
-        const solutions = getSolutionsByIds(solutionIds);
+        const solutions = await getSolutionsByIds(solutionIds);
 
         if (solutions.length === 0) {
           return {
@@ -464,19 +562,213 @@ ${formattedSolutions}${notFoundMsg}`,
     }
   );
 
+  // Register Context7 cached docs fetcher
+  server.registerTool(
+    "context7-cached-docs",
+    {
+      title: "Context7 Cached Docs",
+      description: `Fetch Context7 library docs with local caching. Checks the local cache first; on miss, calls Context7 and stores the result for reuse.
+
+Required: Context7 API key (env CONTEXT7_API_KEY or input).`,
+      inputSchema: {
+        context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
+        libraryId: z
+          .string()
+          .describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
+        topic: z.string().optional().describe("Docs topic (optional)"),
+        page: z.number().int().min(1).max(10).optional().describe("Page number (default 1)"),
+        forceRefresh: z.boolean().optional().describe("If true, bypass cache and refresh"),
+      },
+    },
+    async ({ context7ApiKey, libraryId, topic, page = 1, forceRefresh = false }) => {
+      const apiKey = context7ApiKey || process.env.CONTEXT7_API_KEY;
+
+      try {
+        if (!forceRefresh) {
+          const cached = await getCachedContext7Doc(libraryId, topic, page);
+          if (cached) {
+            return {
+              content: [
+                { type: "text", text: cached },
+                {
+                  type: "text",
+                  text: `(served from cache at ${getContext7CachePath()})`,
+                },
+              ],
+            };
+          }
+        }
+
+        const fetched = await callContext7Tool(
+          "get-library-docs",
+          {
+            context7CompatibleLibraryID: libraryId,
+            topic,
+            page,
+          },
+          apiKey
+        );
+
+        await setCachedContext7Doc(libraryId, topic, page, fetched);
+
+        return {
+          content: [
+            { type: "text", text: fetched },
+            {
+              type: "text",
+              text: `(cached at ${getContext7CachePath()})`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Context7 fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   return server;
 }
 
 async function main() {
+  if (process.argv.length > 2) {
+    await runCli(process.argv);
+    return;
+  }
+
   const server = createServerInstance();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("ErrorSolver MCP Server running on stdio");
+  console.error("Context8 MCP Server running on stdio");
   console.error(`Database location: ${getDatabasePath()}`);
-  console.error(`Total solutions: ${getSolutionCount()}`);
+  console.error(`Total solutions: ${await getSolutionCount()}`);
 }
 
 main().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
 });
+
+async function runCli(argv: string[]) {
+  const program = new Command();
+  program.name("context8-mcp").description("CLI utilities for Context8 MCP");
+
+  program
+    .command("list")
+    .description("List recent solutions")
+    .option("-l, --limit <number>", "Number of items", (v) => parseInt(v, 10), 20)
+    .option("-o, --offset <number>", "Offset for pagination", (v) => parseInt(v, 10), 0)
+    .action(async (opts) => {
+      const items = await listSolutions(opts.limit, opts.offset);
+      if (items.length === 0) {
+        console.log("No solutions found.");
+        return;
+      }
+      for (const item of items) {
+        console.log(
+          `${item.id} | ${item.createdAt} | ${item.errorType} | ${item.tags.join(", ")} | ${item.title}`
+        );
+      }
+    });
+
+  program
+    .command("delete")
+    .description("Delete a solution by ID")
+    .argument("<id>", "Solution ID")
+    .action(async (id) => {
+      const ok = await deleteSolution(id);
+      if (ok) {
+        console.log(`Deleted solution ${id}`);
+      } else {
+        console.error(`Solution not found: ${id}`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("update")
+    .description("Check for a newer published version and install it (npm -g)")
+    .option("-p, --package <name>", "Package name", pkgJson.name)
+    .action(async (opts) => {
+      const pkgName = opts.package as string;
+      try {
+        const latest = execSync(`npm view ${pkgName} version`, { stdio: ["ignore", "pipe", "ignore"] })
+          .toString()
+          .trim();
+        if (!latest) {
+          console.log("Unable to determine latest version.");
+          return;
+        }
+        if (latest === pkgJson.version) {
+          console.log(`Already at latest version (${latest}).`);
+          return;
+        }
+        console.log(`Updating ${pkgName} from ${pkgJson.version} to ${latest}...`);
+        execSync(`npm install -g ${pkgName}@${latest}`, { stdio: "inherit" });
+        console.log("Update complete.");
+      } catch (error) {
+        console.error("Update failed:", error instanceof Error ? error.message : error);
+        process.exitCode = 1;
+      }
+    });
+
+  await program.parseAsync(argv);
+}
+
+async function callContext7Tool(
+  name: "get-library-docs",
+  args: Record<string, unknown>,
+  apiKey: string | undefined,
+  endpoint = "https://mcp.context7.com/mcp"
+): Promise<string> {
+  const resolvedEndpoint = process.env.CONTEXT7_ENDPOINT || endpoint;
+
+  const body = {
+    jsonrpc: "2.0",
+    id: "1",
+    method: "tools/call",
+    params: {
+      name,
+      arguments: args,
+    },
+  };
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
+  };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const res = await fetch(resolvedEndpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Context7 request failed with status ${res.status}`);
+  }
+
+  const json = (await res.json()) as any;
+  if (json.error) {
+    throw new Error(json.error?.message || "Context7 returned an error");
+  }
+
+  const text =
+    json.result?.content?.find((c: any) => c.type === "text")?.text ??
+    json.result?.content?.[0]?.text;
+
+  if (!text) {
+    throw new Error("Context7 response did not include text content");
+  }
+
+  return text as string;
+}

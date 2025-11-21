@@ -1,222 +1,81 @@
-# ErrorSolver MCP Server
+# Context8 MCP – Local Error Solution Vault
 
-A Model Context Protocol (MCP) server for building and managing a local knowledge base of error solutions with semantic search capabilities.
+[![NPM Version](https://img.shields.io/npm/v/context8-mcp?color=red)](https://www.npmjs.com/package/context8-mcp) [![MIT licensed](https://img.shields.io/npm/l/context8-mcp)](./LICENSE) [![Repo](https://img.shields.io/badge/GitHub-PangYuanbo%2Fcontext8-blue)](https://github.com/PangYuanbo/context8)
 
-## Overview
+Context8 is a local-first MCP server for saving, searching, and reusing debugging solutions. It stores errors, root causes, fixes, and environment versions on your machine with hybrid (semantic + keyword) search—no external APIs.
 
-ErrorSolver helps developers maintain a personal knowledge base of debugging solutions. When you encounter and solve errors, save them to your local database for future reference. The semantic search feature intelligently matches your queries to previously solved problems, even when the wording differs.
-
-## Features
-
-- **🔒 Privacy-First Design**: All data stored locally on your machine
-- **🧠 Semantic Search**: AI-powered similarity matching using local embeddings
-- **📦 SQLite Database**: Lightweight, fast, and reliable storage
-- **🏷️ Tagging System**: Organize solutions by technology, error type, and custom tags
-- **🔍 Full-Text Search**: Fallback search when semantic search isn't available
-- **📝 Rich Metadata**: Store error messages, context, root causes, solutions, and code changes
+- 100% local storage: `~/.context8/solutions.db`
+- Dense + sparse hybrid search (MiniLM embeddings + BM25-style keywords)
+- Environment snapshot required (Node/OS/dependency versions) to save
+- CLI included for listing and deleting records
 
 ## Installation
 
+### Mode 1: Context8 CLI (global install)
 ```bash
-cd context8
-npm install
-npm run build
+npm install -g context8-mcp
 ```
 
-## Usage with Claude Code
+### Mode 2: npx (no global install)
+```bash
+npx context8-mcp --help
+```
+Data persists at `~/.context8/solutions.db` (auto-created on first run).
 
-Add to your MCP settings file:
+### Vibe / Claude Code–style MCP config
 
-### Windows
-`%APPDATA%\Claude\claude_desktop_config.json`
-
-### macOS/Linux
-`~/Library/Application Support/Claude/claude_desktop_config.json`
-
+Global install path:
 ```json
 {
   "mcpServers": {
-    "errorsolver": {
+    "context8": {
       "command": "node",
-      "args": ["/absolute/path/to/context8/dist/index.js"]
+      "args": ["$(npm root -g)/context8-mcp/dist/index.js"]
     }
   }
 }
 ```
+If installed locally, replace the args path with your project’s absolute `dist/index.js`.
 
-## Available MCP Tools
-
-### 1. `save-error-solution`
-
-Save an error and its solution to your local knowledge base.
-
-**Parameters:**
-- `title` (string): Generic technical title
-- `errorMessage` (string): The error message (redacted)
-- `errorType` (enum): Type of error (compile, runtime, configuration, etc.)
-- `context` (string): Generic technical context
-- `rootCause` (string): Technical root cause analysis
-- `solution` (string): Generic step-by-step solution
-- `codeChanges` (string, optional): Abstracted code changes
-- `tags` (string[]): Technology tags
-- `projectPath` (string, optional): Generic project type
-
-**Privacy Guidelines:**
-- ❌ No project-specific file paths, variable names, or API endpoints
-- ❌ No sensitive information (keys, tokens, passwords, URLs)
-- ❌ No business logic or proprietary details
-- ✅ Focus on generic technical patterns
-- ✅ Use placeholder names and hypothetical scenarios
-
-**Example:**
-```typescript
+npx mode (no global install):
+```json
 {
-  title: "React Hook called outside functional component causes TypeError",
-  errorMessage: "TypeError: Cannot read property 'useState' of null",
-  errorType: "runtime",
-  context: "During rendering of a React component in a Next.js application",
-  rootCause: "React hooks can only be called inside functional components or custom hooks. The error occurs when trying to use a hook in a class component or outside the component tree.",
-  solution: "1. Ensure the hook is called inside a functional component\n2. Check that the component file exports a functional component\n3. Verify React version supports hooks (16.8+)",
-  codeChanges: "// Before\nclass Component extends React.Component {\n  const [state] = useState(0);\n}\n\n// After\nfunction Component() {\n  const [state, setState] = useState(0);\n}",
-  tags: ["react", "hooks", "typescript", "nextjs"],
-  projectPath: "nextjs-app"
+  "mcpServers": {
+    "context8": {
+      "command": "npx",
+      "args": ["context8-mcp"]
+    }
+  }
 }
 ```
+Both modes share the same DB at `~/.context8/solutions.db`.
 
-### 2. `search-solutions`
+Context7 passthrough (for `context7-cached-docs`):
+- Set `CONTEXT7_API_KEY` in the MCP env (recommended for remote endpoint).
+- Optional: override endpoint with `CONTEXT7_ENDPOINT` (e.g., `http://localhost:3100/mcp` if you run Context7 locally).
 
-Search your knowledge base using semantic similarity or full-text search.
+## Available tools
+- `save-error-solution`: Save error/root cause/solution/tags/environment (fails if versions are missing).
+- `search-solutions`: Hybrid search (`mode`: hybrid/semantic/sparse), returns scores and previews.
+- `get-solution-detail`: Fetch full detail by ID.
+- `batch-get-solutions`: Fetch multiple solutions (1–10 IDs).
 
-**Parameters:**
-- `query` (string): Search query (error message, keywords, or technology names)
-- `limit` (number, optional): Maximum results (default: 25)
+## CLI (no MCP client needed)
+- List: `context8-mcp list --limit 20 --offset 0`
+- Delete: `context8-mcp delete <id>`
+- Update check: `context8-mcp update`
 
-**Returns:**
-- List of matching solutions with similarity scores
-- Preview of error message and context
-- Solution IDs for detailed retrieval
+## Data & storage
+- DB: `~/.context8/solutions.db` (sql.js)
+- Embeddings: MiniLM 384d; default hybrid weights 0.7 (dense) / 0.3 (sparse)
+- Writes persist to disk; delete cleans inverted index + stats
 
-**Example:**
-```typescript
-{
-  query: "react hook error useState",
-  limit: 10
-}
-```
-
-### 3. `get-solution-detail`
-
-Retrieve full details of a specific solution by ID.
-
-**Parameters:**
-- `solutionId` (string): Solution ID from search results
-
-**Returns:**
-- Complete solution with all fields
-- Error message, context, root cause, solution steps
-- Code changes if available
-
-### 4. `batch-get-solutions`
-
-Retrieve multiple solutions at once (more efficient than individual requests).
-
-**Parameters:**
-- `solutionIds` (string[]): Array of solution IDs (1-10)
-
-**Returns:**
-- Full details for all requested solutions
-- Missing solution notifications
-
-**Example:**
-```typescript
-{
-  solutionIds: ["abc123-def456", "xyz789-uvw012", "pqr345-stu678"]
-}
-```
-
-## Database Location
-
-Solutions are stored in: `~/.errorsolver/solutions.db`
-
-## How It Works
-
-### Semantic Search
-
-1. **Embedding Generation**: When you save a solution, the server generates a 384-dimensional vector embedding using the `all-MiniLM-L6-v2` model locally
-2. **Vector Storage**: Embeddings are stored as binary blobs in SQLite
-3. **Query Matching**: When you search, your query is converted to an embedding and compared using cosine similarity
-4. **Ranking**: Results are ranked by similarity score (0-100%)
-
-### Full-Text Search (Fallback)
-
-If semantic search fails or no embeddings exist, the server falls back to SQLite FTS5 full-text search using BM25 ranking.
-
-## Architecture
-
-```
-context8/
-├── src/
-│   ├── index.ts          # MCP server & tool registration
-│   └── lib/
-│       ├── database.ts   # SQLite operations & search
-│       ├── embeddings.ts # Local transformer model for vectors
-│       └── types.ts      # TypeScript type definitions
-├── dist/                 # Compiled JavaScript output
-├── package.json          # Dependencies & scripts
-└── tsconfig.json         # TypeScript configuration
-```
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Format code
-npm run format
-
-# Lint
-npm run lint
-
-# Run
-npm start
-```
-
-## Dependencies
-
-- **@modelcontextprotocol/sdk**: MCP protocol implementation
-- **@xenova/transformers**: Local transformer models for embeddings
-- **better-sqlite3**: Fast SQLite database with FTS5 support
-- **zod**: Schema validation for tool inputs
-
-## Use Cases
-
-- 📚 Build a personal debugging knowledge base
-- 🔄 Share common solutions across your team
-- 🚀 Speed up problem-solving by referencing past solutions
-- 🎓 Learn from your debugging history
-- 📊 Track recurring issues and patterns
-
-## Privacy & Security
-
-- ✅ **100% Local**: All data stored on your machine
-- ✅ **No Cloud Sync**: No external API calls for storage
-- ✅ **Local AI**: Embeddings generated locally with transformers.js
-- ✅ **Privacy Guidelines**: Built-in prompts enforce data abstraction
-
-## License
-
-MIT
+## Quick start
+1) `npm install -g context8-mcp`
+2) Configure MCP with `command: node`, `args: ["$(npm root -g)/context8-mcp/dist/index.js"]`
+3) Save an error with `save-error-solution` (include dependency versions)
+4) Search with `search-solutions` (hybrid mode)
 
 ## Contributing
-
-Contributions welcome! This is a custom-modified MCP server based on Context7 architecture.
-
-## Credits
-
-- Built on MCP (Model Context Protocol) by Anthropic
-- Architecture inspired by Context7
-- Embeddings powered by Xenova/transformers.js
+PRs welcome: https://github.com/PangYuanbo/context8  
+License: MIT

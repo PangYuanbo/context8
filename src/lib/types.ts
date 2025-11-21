@@ -11,6 +11,7 @@ export interface ErrorSolution {
   tags: string[];
   createdAt: string;
   projectPath?: string;
+  environment?: Record<string, unknown>;
 }
 
 export interface SolutionSearchResult {
@@ -34,3 +35,20 @@ export type ErrorType =
   | "performance"
   | "security"
   | "other";
+
+export type SearchMode = "semantic" | "hybrid" | "sparse";
+
+export interface SearchOptions {
+  mode?: SearchMode;
+  denseWeight?: number;
+  sparseWeight?: number;
+  coarseLimit?: number;
+}
+
+export interface Context7Query {
+  libraryId: string;
+  topic?: string;
+  page?: number;
+  forceRefresh?: boolean;
+  apiKey?: string;
+}

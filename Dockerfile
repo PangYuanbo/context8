@@ -1,5 +1,5 @@
-# ErrorSolver MCP Server Dockerfile
-# Note: ErrorSolver primarily uses stdio transport and local SQLite storage
+# Context8 MCP Server Dockerfile
+# Note: Context8 primarily uses stdio transport and local SQLite storage
 # This Dockerfile is provided for containerization but not required for typical use
 
 # ----- Build Stage -----
@@ -29,13 +29,13 @@ COPY package.json package-lock.json ./
 RUN npm ci --production --ignore-scripts
 
 # Create directory for SQLite database
-RUN mkdir -p /root/.errorsolver
+RUN mkdir -p /root/.context8
 
 # Volume for persistent database storage
-VOLUME /root/.errorsolver
+VOLUME /root/.context8
 
 # Default command (stdio transport)
 CMD ["node", "dist/index.js"]
 
 # Note: This container uses stdio transport by default
-# Mount your database volume: -v ~/.errorsolver:/root/.errorsolver
+# Mount your database volume: -v ~/.context8:/root/.context8
