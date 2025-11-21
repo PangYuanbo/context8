@@ -1,0 +1,1 @@
+IMPORTANT: Do not publish to npm without explicit authorization from the owner. Always confirm before running `npm publish` or changing dist-tags. Use local builds for testing; keep database files untouched. Default DB paths: ~/.context8/solutions.db and ~/.context8/context7-cache.db.

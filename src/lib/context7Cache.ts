@@ -68,9 +68,7 @@ export async function getCachedContext7Doc(
   page: number
 ): Promise<string | null> {
   const db = await initContext7CacheDb();
-  const stmt = db.prepare(
-    "SELECT payload FROM context7_cache WHERE cache_key = ? LIMIT 1"
-  );
+  const stmt = db.prepare("SELECT payload FROM context7_cache WHERE cache_key = ? LIMIT 1");
   const key = buildCacheKey(libraryId, topic, page);
   stmt.bind([key]);
   const row = stmt.step() ? (stmt.getAsObject() as any) : null;

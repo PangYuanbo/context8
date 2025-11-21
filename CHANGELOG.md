@@ -5,6 +5,7 @@ All notable changes to the ErrorSolver MCP Server will be documented in this fil
 ## [1.0.0] - 2025-01-19
 
 ### Added
+
 - Initial release of ErrorSolver MCP Server
 - Local SQLite database for error solution storage
 - Semantic search using all-MiniLM-L6-v2 embeddings
@@ -20,6 +21,7 @@ All notable changes to the ErrorSolver MCP Server will be documented in this fil
 - Tagging system for technology categorization
 
 ### Features
+
 - 🔒 100% local storage in `~/.errorsolver/`
 - 🧠 AI-powered semantic similarity matching
 - 📦 Lightweight SQLite database
@@ -28,6 +30,7 @@ All notable changes to the ErrorSolver MCP Server will be documented in this fil
 - 📝 Rich metadata support
 
 ### Technical
+
 - Built on @modelcontextprotocol/sdk v1.17.5
 - Uses @xenova/transformers for local embeddings
 - TypeScript with strict type checking

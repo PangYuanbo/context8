@@ -16,6 +16,7 @@ npm run build
 ```
 
 Expected output:
+
 ```
 added 293 packages
 ```
@@ -23,15 +24,19 @@ added 293 packages
 ## Step 2: Configure Claude Desktop
 
 ### Windows
+
 Edit `%APPDATA%\Claude\claude_desktop_config.json`
 
 ### macOS
+
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ### Linux
+
 Edit `~/.config/Claude/claude_desktop_config.json`
 
 Add this configuration:
+
 ```json
 {
   "mcpServers": {
@@ -58,6 +63,7 @@ Search my error solutions for "react"
 ```
 
 If the server is working, you'll see:
+
 ```
 No solutions found for "react".
 Knowledge base contains 0 total solution(s).
@@ -96,22 +102,26 @@ You should see your saved solution with a similarity score!
 ## Common Commands
 
 ### Save a Solution (when you fix an error)
+
 ```
 Save this error solution to my knowledge base:
 [describe the error and solution]
 ```
 
 ### Search for Solutions
+
 ```
 Search my error solutions for "typescript type error"
 ```
 
 ### Get Solution Details
+
 ```
 Show me the full details for solution ID abc123-def456
 ```
 
 ### Batch Retrieve Multiple Solutions
+
 ```
 Get me the full details for these solutions: abc123, def456, xyz789
 ```
@@ -119,27 +129,33 @@ Get me the full details for these solutions: abc123, def456, xyz789
 ## Database Location
 
 Your solutions are stored at:
+
 - **Windows**: `C:\Users\YourUsername\.errorsolver\solutions.db`
 - **macOS/Linux**: `~/.errorsolver/solutions.db`
 
 ## Tips for Best Results
 
 ### 1. Use Good Tags
+
 ```
 Tags: ["react", "typescript", "hooks", "nextjs", "ssr"]
 ```
 
 ### 2. Write Generic Solutions
+
 ❌ Bad: "Fixed getUserProfile API error in the auth module"
 ✅ Good: "Resolved async/await error in API request handler"
 
 ### 3. Include Context
+
 ```
 Context: "During server-side rendering in a Next.js application"
 ```
 
 ### 4. Abstract Sensitive Info
+
 Replace:
+
 - Real paths → Generic paths (`src/components/Component.tsx`)
 - Real API URLs → Placeholders (`api.example.com/resource`)
 - Real function names → Generic names (`fetchData`, `handleSubmit`)
@@ -147,11 +163,14 @@ Replace:
 ## Troubleshooting
 
 ### Server Not Starting?
+
 Check the Claude Desktop logs:
+
 - Windows: `%APPDATA%\Claude\logs\mcp*.log`
 - macOS: `~/Library/Logs/Claude/mcp*.log`
 
 ### Build Failed?
+
 ```bash
 rm -rf node_modules dist
 npm install
@@ -159,7 +178,9 @@ npm run build
 ```
 
 ### Database Issues?
+
 The database is created automatically on first use. If you want to start fresh:
+
 ```bash
 # Backup first!
 rm ~/.errorsolver/solutions.db
@@ -191,6 +212,7 @@ rm ~/.errorsolver/solutions.db
 ## Getting Help
 
 If you encounter issues:
+
 1. Check the Claude Desktop logs
 2. Verify your paths in the config file
 3. Ensure Node.js 18+ is installed

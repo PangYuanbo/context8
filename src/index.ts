@@ -70,10 +70,7 @@ function hasVersionInfo(env: Record<string, unknown> | undefined): boolean {
   if (!env) return false;
   const deps = env.dependencies as Record<string, string> | undefined;
   const devDeps = env.devDependencies as Record<string, string> | undefined;
-  const values = [
-    ...(deps ? Object.values(deps) : []),
-    ...(devDeps ? Object.values(devDeps) : []),
-  ];
+  const values = [...(deps ? Object.values(deps) : []), ...(devDeps ? Object.values(devDeps) : [])];
   return values.some((v) => typeof v === "string" && /\d/.test(v));
 }
 
@@ -173,9 +170,7 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           ),
         tags: z
           .array(z.string())
-          .describe(
-            "Tags for categorization (e.g., ['react', 'typescript', 'hooks', 'nextjs'])"
-          ),
+          .describe("Tags for categorization (e.g., ['react', 'typescript', 'hooks', 'nextjs'])"),
         environment: z
           .record(z.string(), z.any())
           .optional()
@@ -572,9 +567,7 @@ ${formattedSolutions}${notFoundMsg}`,
 Required: Context7 API key (env CONTEXT7_API_KEY or input).`,
       inputSchema: {
         context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
-        libraryId: z
-          .string()
-          .describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
+        libraryId: z.string().describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
         topic: z.string().optional().describe("Docs topic (optional)"),
         page: z.number().int().min(1).max(10).optional().describe("Page number (default 1)"),
         forceRefresh: z.boolean().optional().describe("If true, bypass cache and refresh"),
@@ -698,7 +691,9 @@ async function runCli(argv: string[]) {
     .action(async (opts) => {
       const pkgName = opts.package as string;
       try {
-        const latest = execSync(`npm view ${pkgName} version`, { stdio: ["ignore", "pipe", "ignore"] })
+        const latest = execSync(`npm view ${pkgName} version`, {
+          stdio: ["ignore", "pipe", "ignore"],
+        })
           .toString()
           .trim();
         if (!latest) {

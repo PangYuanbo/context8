@@ -22,12 +22,14 @@ Thank you for your interest in contributing to ErrorSolver! This document provid
 ## Development Setup
 
 ### Prerequisites
+
 - Node.js 18 or higher
 - npm or yarn
 - TypeScript knowledge
 - Basic understanding of MCP (Model Context Protocol)
 
 ### Build and Test
+
 ```bash
 # Build the project
 npm run build
@@ -50,12 +52,14 @@ npm run format
 ## Making Changes
 
 ### For Bug Fixes
+
 1. Create an issue describing the bug
 2. Reference the issue in your PR
 3. Add tests if applicable
 4. Update documentation if needed
 
 ### For New Features
+
 1. Open an issue to discuss the feature first
 2. Get feedback from maintainers
 3. Implement with tests
@@ -63,6 +67,7 @@ npm run format
 5. Add entry to CHANGELOG.md
 
 ### For Documentation
+
 1. Ensure accuracy and clarity
 2. Check for typos and grammar
 3. Update examples if code changes
@@ -71,6 +76,7 @@ npm run format
 ## Commit Messages
 
 Follow conventional commits:
+
 ```
 type(scope): description
 
@@ -80,6 +86,7 @@ type(scope): description
 ```
 
 Types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -89,6 +96,7 @@ Types:
 - `chore`: Maintenance tasks
 
 Examples:
+
 ```
 feat(search): add fuzzy search support
 fix(database): resolve embedding serialization issue
@@ -120,6 +128,7 @@ docs(readme): update installation instructions
 ## Areas for Contribution
 
 ### High Priority
+
 - [ ] Performance optimization for large databases
 - [ ] Better error messages and user feedback
 - [ ] Export/import functionality for solutions
@@ -127,6 +136,7 @@ docs(readme): update installation instructions
 - [ ] Web UI for browsing solutions
 
 ### Medium Priority
+
 - [ ] Support for additional embedding models
 - [ ] Solution versioning system
 - [ ] Statistics and analytics features
@@ -134,6 +144,7 @@ docs(readme): update installation instructions
 - [ ] Solution rating system
 
 ### Low Priority
+
 - [ ] Multi-language support for UI
 - [ ] Cloud sync options (opt-in)
 - [ ] Browser extension integration
@@ -142,6 +153,7 @@ docs(readme): update installation instructions
 ## Code Review Criteria
 
 Your PR will be reviewed for:
+
 - **Functionality**: Does it work as intended?
 - **Code Quality**: Is it clean, readable, maintainable?
 - **Tests**: Are there appropriate tests?
@@ -152,6 +164,7 @@ Your PR will be reviewed for:
 ## Privacy Guidelines
 
 When contributing, always remember:
+
 - ❌ No telemetry or tracking
 - ❌ No external API calls (except documentation)
 - ✅ All data stays local
@@ -171,6 +184,7 @@ By contributing, you agree that your contributions will be licensed under the MI
 ## Recognition
 
 Contributors will be recognized in:
+
 - README.md contributors section
 - CHANGELOG.md for specific contributions
 - GitHub contributors page

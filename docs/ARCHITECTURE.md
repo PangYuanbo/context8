@@ -59,12 +59,14 @@ ErrorSolver is a Model Context Protocol (MCP) server that provides a local, priv
 **Purpose**: Main entry point and MCP protocol handler
 
 **Responsibilities**:
+
 - Initialize MCP server with stdio transport
 - Register all four MCP tools
 - Handle tool invocations
 - Manage server lifecycle
 
 **Key Functions**:
+
 - `createServerInstance()`: Creates and configures the MCP server
 - `main()`: Initializes transport and starts the server
 
@@ -73,6 +75,7 @@ ErrorSolver is a Model Context Protocol (MCP) server that provides a local, priv
 **Purpose**: SQLite database operations and search functionality
 
 **Responsibilities**:
+
 - Database initialization and schema management
 - CRUD operations for error solutions
 - Semantic search using vector embeddings
@@ -80,6 +83,7 @@ ErrorSolver is a Model Context Protocol (MCP) server that provides a local, priv
 - Database migration and maintenance
 
 **Key Functions**:
+
 - `initDatabase()`: Creates database and tables
 - `saveSolution()`: Inserts new solution with embedding
 - `searchSolutions()`: Semantic + FTS5 hybrid search
@@ -89,6 +93,7 @@ ErrorSolver is a Model Context Protocol (MCP) server that provides a local, priv
 - `getSolutionsByIds()`: Batch retrieve solutions
 
 **Database Schema**:
+
 ```sql
 CREATE TABLE solutions (
   id TEXT PRIMARY KEY,
@@ -117,12 +122,14 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 **Purpose**: Local machine learning for semantic search
 
 **Responsibilities**:
+
 - Load and manage transformer model
 - Generate 384-dimensional embeddings
 - Calculate cosine similarity
 - Serialize/deserialize embeddings for storage
 
 **Key Functions**:
+
 - `initPipeline()`: Lazy-load the transformer model
 - `generateEmbedding(text)`: Convert text to vector
 - `generateSolutionEmbedding(solution)`: Combine solution fields
@@ -131,6 +138,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 - `deserializeEmbedding()`: Convert from Buffer
 
 **Model Details**:
+
 - **Model**: `Xenova/all-MiniLM-L6-v2`
 - **Dimensions**: 384
 - **Type**: Sentence transformer (feature extraction)
@@ -141,6 +149,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 **Purpose**: TypeScript type definitions
 
 **Types**:
+
 - `ErrorSolution`: Full solution with all fields
 - `SolutionSearchResult`: Search result preview
 - `ErrorType`: Enum of error categories
@@ -201,6 +210,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 - ✅ Control: Model version is fixed
 
 **Trade-offs**:
+
 - ⚠️ Cold start: ~2-5s to load model first time
 - ⚠️ Accuracy: Smaller model vs. OpenAI/Cohere
 - ⚠️ Memory: ~50MB for model
@@ -208,11 +218,13 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 ### Why Hybrid Search?
 
 **Semantic Search** (Primary):
+
 - Better for finding conceptually similar solutions
 - Handles paraphrasing and synonyms
 - Works across languages (to some extent)
 
 **FTS5 Full-Text Search** (Fallback):
+
 - Faster for exact keyword matches
 - No model loading required
 - Better for specific error messages
@@ -236,6 +248,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 ### Privacy Guidelines in Prompts
 
 The `save-error-solution` tool includes extensive privacy guidelines:
+
 - Abstract file paths, variable names, API endpoints
 - Remove all sensitive information
 - Use generic examples and placeholders
@@ -252,21 +265,21 @@ The `save-error-solution` tool includes extensive privacy guidelines:
 
 ### Time Complexity
 
-| Operation | Complexity | Notes |
-|-----------|------------|-------|
-| Save Solution | O(n) | n = embedding dimension (384) |
-| Semantic Search | O(n*m) | n = solutions, m = embedding dim |
-| FTS5 Search | O(log n) | Inverted index |
-| Get by ID | O(1) | Primary key lookup |
+| Operation       | Complexity | Notes                            |
+| --------------- | ---------- | -------------------------------- |
+| Save Solution   | O(n)       | n = embedding dimension (384)    |
+| Semantic Search | O(n\*m)    | n = solutions, m = embedding dim |
+| FTS5 Search     | O(log n)   | Inverted index                   |
+| Get by ID       | O(1)       | Primary key lookup               |
 
 ### Space Complexity
 
-| Component | Size | Notes |
-|-----------|------|-------|
-| Model | ~50MB | Quantized all-MiniLM-L6-v2 |
-| Embedding | 1.5KB | 384 floats × 4 bytes |
-| Solution | ~2-5KB | Text fields |
-| Database | Variable | ~2-5KB per solution |
+| Component | Size     | Notes                      |
+| --------- | -------- | -------------------------- |
+| Model     | ~50MB    | Quantized all-MiniLM-L6-v2 |
+| Embedding | 1.5KB    | 384 floats × 4 bytes       |
+| Solution  | ~2-5KB   | Text fields                |
+| Database  | Variable | ~2-5KB per solution        |
 
 ### Optimization Opportunities
 

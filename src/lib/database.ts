@@ -473,9 +473,10 @@ export async function searchSolutionsSemantic(
 /**
  * Fallback FTS search
  */
-export async function searchSolutionsFTS(query: string, limit: number = 10): Promise<
-  SolutionSearchResult[]
-> {
+export async function searchSolutionsFTS(
+  query: string,
+  limit: number = 10
+): Promise<SolutionSearchResult[]> {
   const database = await initDatabase();
 
   const terms = query
@@ -626,9 +627,7 @@ async function searchSolutionsHybrid(
   const sparseMap = new Map(sparseCandidates.map((s) => [s.id, s.score]));
   const maxSparse = Math.max(...sparseCandidates.map((s) => s.score), 0) || 1;
 
-  const unionIds = Array.from(
-    new Set([...candidateIds, ...denseCandidates.map((d) => d.id)])
-  );
+  const unionIds = Array.from(new Set([...candidateIds, ...denseCandidates.map((d) => d.id)]));
 
   const missingMetaIds = unionIds.filter((id) => !denseMap.has(id));
   const missingMeta = missingMetaIds.length ? await getSolutionsByIds(missingMetaIds) : [];
@@ -642,9 +641,7 @@ async function searchSolutionsHybrid(
       const denseSim = dense?.similarity ?? 0;
       const finalScore = denseWeight * denseSim + sparseWeight * sparseNorm;
 
-      const meta = dense
-        ? null
-        : metaMap.get(id);
+      const meta = dense ? null : metaMap.get(id);
 
       const preview = dense?.preview ?? buildPreview(meta?.errorMessage, meta?.context);
 
@@ -674,7 +671,9 @@ export async function searchSolutionsByVector(
 ): Promise<SolutionSearchResult[]> {
   const dimension = getEmbeddingDimension();
   if (embedding.length !== dimension) {
-    throw new Error(`Embedding length ${embedding.length} does not match model dimension ${dimension}`);
+    throw new Error(
+      `Embedding length ${embedding.length} does not match model dimension ${dimension}`
+    );
   }
 
   const database = await initDatabase();
