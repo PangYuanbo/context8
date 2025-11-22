@@ -9,6 +9,9 @@ export interface ErrorSolution {
   solution: string;
   codeChanges?: string;
   tags: string[];
+  labels?: string[];
+  cliLibraryId?: string;
+  cliNotes?: string;
   createdAt: string;
   projectPath?: string;
   environment?: Record<string, unknown>;

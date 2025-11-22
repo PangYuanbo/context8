@@ -23,6 +23,15 @@ import {
   setCachedContext7Doc,
   getContext7CachePath,
 } from "./lib/context7Cache.js";
+import {
+  remoteSaveSolution,
+  remoteSearchSolutions,
+  remoteGetSolutionCount,
+  remoteGetSolutionById,
+  remoteGetSolutionsByIds,
+  remoteDeleteSolution,
+  RemoteConfig,
+} from "./lib/remoteClient.js";
 
 const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 
@@ -76,6 +85,16 @@ function hasVersionInfo(env: Record<string, unknown> | undefined): boolean {
 
 // Function to create a new server instance with all ErrorSolver tools registered
 function createServerInstance() {
+  const remoteConfig: RemoteConfig | null =
+    process.env.CONTEXT8_REMOTE_URL && process.env.CONTEXT8_REMOTE_API_KEY
+      ? {
+          baseUrl: process.env.CONTEXT8_REMOTE_URL,
+          apiKey: process.env.CONTEXT8_REMOTE_API_KEY,
+        }
+      : process.env.CONTEXT8_REMOTE_URL
+        ? { baseUrl: process.env.CONTEXT8_REMOTE_URL }
+        : null;
+
   const server = new McpServer(
     {
       name: "Context8",
@@ -162,6 +181,13 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           .describe(
             "GENERIC step-by-step solution pattern. Use placeholder names like 'Component', 'fetchData', 'handleSubmit'. The solution should be applicable to any similar technical situation."
           ),
+        labels: z.array(z.string()).optional().describe("Optional labels/classifications"),
+        cliLibraryId: z
+          .string()
+          .optional()
+          .describe(
+            "Optional: Context7 library id (must include version, e.g., /vercel/next.js/v15.1.8) for CLI-related errors; auto-fetches help into the record."
+          ),
         codeChanges: z
           .string()
           .optional()
@@ -194,6 +220,8 @@ The goal is to create reusable knowledge that helps solve similar technical prob
       solution: string;
       codeChanges?: string;
       tags: string[];
+      labels?: string[];
+      cliLibraryId?: string;
       projectPath?: string;
       environment?: Record<string, unknown>;
     }) => {
@@ -207,6 +235,8 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           solution,
           codeChanges,
           tags,
+          labels,
+          cliLibraryId,
           projectPath,
           environment,
         } = params;
@@ -222,20 +252,60 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           );
         }
 
-        const savedSolution = await saveSolution({
-          title,
-          errorMessage,
-          errorType,
-          context,
-          rootCause,
-          solution,
-          codeChanges,
-          tags,
-          projectPath,
-          environment: mergedEnvironment,
-        });
+        let cliNotes: string | undefined;
+        if (cliLibraryId) {
+          try {
+            cliNotes = await callContext7Tool(
+              "get-library-docs",
+              {
+                context7CompatibleLibraryID: cliLibraryId,
+                topic: "cli",
+                page: 1,
+              },
+              process.env.CONTEXT7_API_KEY
+            );
+          } catch (err) {
+            cliNotes = `Context7 CLI help fetch failed: ${
+              err instanceof Error ? err.message : "unknown error"
+            }`;
+          }
+        }
 
-        const totalCount = await getSolutionCount();
+        const savedSolution = remoteConfig
+          ? await remoteSaveSolution(remoteConfig, {
+              title,
+              errorMessage,
+              errorType,
+              context,
+              rootCause,
+              solution,
+              codeChanges,
+              tags,
+              labels,
+              cliLibraryId,
+              cliNotes,
+              projectPath,
+              environment: mergedEnvironment,
+            })
+          : await saveSolution({
+              title,
+              errorMessage,
+              errorType,
+              context,
+              rootCause,
+              solution,
+              codeChanges,
+              tags,
+              labels,
+              cliLibraryId,
+              cliNotes,
+              projectPath,
+              environment: mergedEnvironment,
+            });
+
+        const totalCount = remoteConfig
+          ? await remoteGetSolutionCount(remoteConfig)
+          : await getSolutionCount();
 
         return {
           content: [
@@ -306,10 +376,21 @@ After reviewing the results, use 'batch-get-solutions' to retrieve full details 
     },
     async ({ query, limit = 25, mode }) => {
       try {
-        const results = await searchSolutions(query, limit, {
-          mode: mode || "hybrid",
-        });
-        const totalCount = await getSolutionCount();
+        const defaultLimitEnv = process.env.CONTEXT8_DEFAULT_LIMIT
+          ? parseInt(process.env.CONTEXT8_DEFAULT_LIMIT, 10)
+          : undefined;
+        const effectiveLimit = limit || defaultLimitEnv || 25;
+
+        const results = remoteConfig
+          ? await remoteSearchSolutions(remoteConfig, query, effectiveLimit, {
+              mode: mode || "hybrid",
+            })
+          : await searchSolutions(query, effectiveLimit, {
+              mode: mode || "hybrid",
+            });
+        const totalCount = remoteConfig
+          ? await remoteGetSolutionCount(remoteConfig)
+          : await getSolutionCount();
 
         if (results.length === 0) {
           return {
@@ -386,7 +467,9 @@ The solution ID is returned by the search-solutions tool.`,
     },
     async ({ solutionId }) => {
       try {
-        const solution = await getSolutionById(solutionId);
+        const solution = remoteConfig
+          ? await remoteGetSolutionById(remoteConfig, solutionId)
+          : await getSolutionById(solutionId);
 
         if (!solution) {
           return {
@@ -477,7 +560,9 @@ This is more efficient than calling 'get-solution-detail' multiple times.`,
     },
     async ({ solutionIds }) => {
       try {
-        const solutions = await getSolutionsByIds(solutionIds);
+        const solutions = remoteConfig
+          ? await remoteGetSolutionsByIds(remoteConfig, solutionIds)
+          : await getSolutionsByIds(solutionIds);
 
         if (solutions.length === 0) {
           return {
@@ -550,6 +635,64 @@ ${formattedSolutions}${notFoundMsg}`,
             {
               type: "text",
               text: `Failed to retrieve solutions: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Register ErrorSolver tool: delete-solution
+  server.registerTool(
+    "delete-solution",
+    {
+      title: "Delete Solution",
+      description: `Deletes a solution from the knowledge base by ID.
+
+Use this tool when:
+- A record is obsolete or duplicated
+- You need to remove an entry for privacy reasons
+
+The deletion also removes the sparse index and stats so the DB stays consistent.`,
+      inputSchema: {
+        id: z.string().describe("Solution ID to delete (e.g., 'abc123-xyz')"),
+      },
+    },
+    async ({ id }) => {
+      try {
+        const deleted = remoteConfig
+          ? await remoteDeleteSolution(remoteConfig, id)
+          : await deleteSolution(id);
+
+        if (!deleted) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Solution not found: ${id}`,
+              },
+            ],
+          };
+        }
+
+        const remaining = remoteConfig
+          ? await remoteGetSolutionCount(remoteConfig)
+          : await getSolutionCount();
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Deleted solution ${id}. Remaining solutions: ${remaining}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to delete solution: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };

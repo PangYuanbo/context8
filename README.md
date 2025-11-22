@@ -68,6 +68,7 @@ Context7 passthrough (for `context7-cached-docs`):
 - `search-solutions`: Hybrid search (`mode`: hybrid/semantic/sparse), returns scores and previews.
 - `get-solution-detail`: Fetch full detail by ID.
 - `batch-get-solutions`: Fetch multiple solutions (1–10 IDs).
+- `delete-solution`: Remove a record by ID (cleans inverted index + stats).
 - `context7-cached-docs`: Fetch Context7 docs with local cache. Always use versioned IDs (e.g., /vercel/next.js/v15.1.8). Optional env: CONTEXT7_API_KEY, CONTEXT7_ENDPOINT.
 
 ## CLI (no MCP client needed)
