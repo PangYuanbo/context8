@@ -21,6 +21,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 let db: SqlJsDatabase | null = null;
+export interface DatabaseHealth {
+  ok: boolean;
+  message: string;
+  path: string;
+  count?: number;
+  issues?: string[];
+}
 
 async function loadSql(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
@@ -838,6 +845,51 @@ export async function getSolutionCount(): Promise<number> {
   const row = stmt.step() ? (stmt.getAsObject() as { count: number }) : { count: 0 };
   stmt.free();
   return row.count;
+}
+
+export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
+  const issues: string[] = [];
+  try {
+    const database = await initDatabase();
+    const tableInfo = database.exec("PRAGMA table_info(solutions);");
+    const columns =
+      tableInfo.length > 0
+        ? tableInfo[0].values.map((row) => (row[1] as string | undefined) || "").filter(Boolean)
+        : [];
+    const requiredColumns = [
+      "id",
+      "title",
+      "error_message",
+      "error_type",
+      "context",
+      "root_cause",
+      "solution",
+      "tags",
+      "created_at",
+    ];
+    for (const col of requiredColumns) {
+      if (!columns.includes(col)) issues.push(`missing column: ${col}`);
+    }
+
+    const countStmt = database.prepare("SELECT COUNT(*) as count FROM solutions");
+    const row = countStmt.step() ? (countStmt.getAsObject() as { count: number }) : { count: 0 };
+    countStmt.free();
+
+    return {
+      ok: issues.length === 0,
+      message: issues.length === 0 ? "database ready" : "schema issues detected",
+      path: DB_PATH,
+      count: row.count,
+      issues: issues.length > 0 ? issues : undefined,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "unknown database error",
+      path: DB_PATH,
+      issues: issues.length > 0 ? issues : undefined,
+    };
+  }
 }
 
 /**

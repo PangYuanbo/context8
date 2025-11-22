@@ -17,6 +17,7 @@ import {
   getDatabasePath,
   listSolutions,
   deleteSolution,
+  checkDatabaseHealth,
 } from "./lib/database.js";
 import {
   getCachedContext7Doc,
@@ -839,6 +840,23 @@ async function runCli(argv: string[]) {
     .description("Check for a newer published version and install it (npm -g)")
     .option("-p, --package <name>", "Package name", pkgJson.name)
     .action(async (opts) => {
+      try {
+        const health = await checkDatabaseHealth();
+        if (health.ok) {
+          console.log(
+            `DB OK at ${health.path} (${health.count ?? 0} record${(health.count ?? 0) === 1 ? "" : "s"})`
+          );
+        } else {
+          console.warn(
+            `DB check reported issues at ${health.path}: ${health.message}${
+              health.issues ? ` [${health.issues.join(", ")}]` : ""
+            }`
+          );
+        }
+      } catch (err) {
+        console.warn(`DB check failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      }
+
       const pkgName = opts.package as string;
       try {
         const latest = execSync(`npm view ${pkgName} version`, {

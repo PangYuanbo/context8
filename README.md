@@ -76,6 +76,7 @@ Context7 passthrough (for `context7-cached-docs`):
 - List: `context8-mcp list --limit 20 --offset 0`
 - Delete: `context8-mcp delete <id>`
 - Update check: `context8-mcp update`
+  - Runs a DB health check first (ensures schema/columns exist); warns if issues detected.
 
 ## Data & storage
 
