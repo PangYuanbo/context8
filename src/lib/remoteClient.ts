@@ -1,4 +1,4 @@
-import { ErrorSolution, SolutionSearchResult, ErrorType, SearchOptions } from "./types.js";
+import { ErrorSolution, SolutionSearchResult, SearchOptions } from "./types.js";
 
 export interface RemoteConfig {
   baseUrl: string;
