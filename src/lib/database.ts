@@ -22,6 +22,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 let db: SqlJsDatabase | null = null;
 
+export interface DatabaseHealth {
+  ok: boolean;
+  message: string;
+  path: string;
+  count?: number;
+  issues?: string[];
+}
+
 async function loadSql(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
     const wasmPath = join(__dirname, "../../node_modules/sql.js/dist/sql-wasm.wasm");
@@ -931,4 +939,54 @@ export async function listSolutions(
     projectPath: row.project_path || undefined,
     environment: row.environment ? JSON.parse(row.environment) : undefined,
   }));
+}
+
+export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
+  const issues: string[] = [];
+  try {
+    const database = await initDatabase();
+    const tableInfo = database.exec("PRAGMA table_info(solutions);");
+    const columns =
+      tableInfo.length > 0
+        ? tableInfo[0].values.map((row) => (row[1] as string | undefined) || "").filter(Boolean)
+        : [];
+    const requiredColumns = [
+      "id",
+      "title",
+      "error_message",
+      "error_type",
+      "context",
+      "root_cause",
+      "solution",
+      "tags",
+      "created_at",
+    ];
+    for (const col of requiredColumns) {
+      if (!columns.includes(col)) issues.push(`missing column: ${col}`);
+    }
+    const count = await getSolutionCount();
+    const path = getDatabasePath();
+    if (issues.length > 0) {
+      return {
+        ok: false,
+        message: `Database has issues: ${issues.join(", ")}`,
+        path,
+        count,
+        issues,
+      };
+    }
+    return {
+      ok: true,
+      message: "Database is healthy",
+      path,
+      count,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Database check failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      path: getDatabasePath(),
+      issues: [error instanceof Error ? error.message : "unknown error"],
+    };
+  }
 }
