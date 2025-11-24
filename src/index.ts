@@ -84,6 +84,49 @@ function hasVersionInfo(env: Record<string, unknown> | undefined): boolean {
   return values.some((v) => typeof v === "string" && /\d/.test(v));
 }
 
+function versionIssues(
+  env: Record<string, unknown> | undefined
+): { ok: boolean; message?: string; missing?: string[] } {
+  if (!env) return { ok: false, message: "Environment object is missing" };
+
+  const deps = (env.dependencies as Record<string, string> | undefined) || {};
+  const devDeps = (env.devDependencies as Record<string, string> | undefined) || {};
+  const entries = Object.entries({ ...deps, ...devDeps });
+
+  if (entries.length === 0) {
+    return {
+      ok: false,
+      message: "No dependency versions found in environment (dependencies/devDependencies are empty)",
+    };
+  }
+
+  const badKeys: string[] = [];
+  let hasVersion = false;
+
+  for (const [name, version] of entries) {
+    if (typeof version === "string" && /\d/.test(version)) {
+      hasVersion = true;
+    } else {
+      badKeys.push(name);
+    }
+  }
+
+  if (!hasVersion) {
+    return {
+      ok: false,
+      message: "No dependency version strings detected (expected values like '19.0.0' or '^2.3.1')",
+      missing: badKeys,
+    };
+  }
+
+  return badKeys.length > 0
+    ? {
+        ok: true,
+        missing: badKeys,
+      }
+    : { ok: true };
+}
+
 // Function to create a new server instance with all ErrorSolver tools registered
 function createServerInstance() {
   const remoteConfig: RemoteConfig | null =
@@ -247,9 +290,17 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           ? { ...autoEnvironment, ...environment }
           : autoEnvironment;
 
-        if (!hasVersionInfo(mergedEnvironment)) {
+        const versionCheck = versionIssues(mergedEnvironment);
+        if (!versionCheck.ok) {
+          const detail = versionCheck.missing && versionCheck.missing.length > 0
+            ? ` Missing/invalid versions for: ${versionCheck.missing.join(", ")}.`
+            : "";
           throw new Error(
-            "Save aborted: missing library version info. Please include dependency versions (e.g., react, react-dom, typescript) and retry."
+            `Save aborted: ${versionCheck.message || "missing dependency version info."}${detail}`
+          );
+        } else if (versionCheck.missing && versionCheck.missing.length > 0) {
+          console.warn(
+            `Proceeding but some dependencies lack version patterns: ${versionCheck.missing.join(", ")}`
           );
         }
 
