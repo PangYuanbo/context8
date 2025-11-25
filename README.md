@@ -80,9 +80,10 @@ Context7 passthrough (for `context7-cached-docs`):
 
 ## Data & storage
 
-- DB: `~/.context8/solutions.db` (sql.js)
+- DB: `~/.context8/solutions.db` (SQLite via better-sqlite3, WAL enabled for multi-process safety)
 - Embeddings: MiniLM 384d; default hybrid weights 0.7 (dense) / 0.3 (sparse)
 - Writes persist to disk; delete cleans inverted index + stats
+- Native module: `better-sqlite3` (prebuilt binaries for common platforms)
 
 ## Quick start
 

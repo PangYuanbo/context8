@@ -1,8 +1,8 @@
-import initSqlJs, { Database as SqlJsDatabase, SqlJsStatic } from "sql.js";
+import Database from "better-sqlite3";
+import type { Database as BetterSqlite3Database } from "better-sqlite3";
 import { homedir } from "os";
-import { dirname, join } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { fileURLToPath } from "url";
+import { join } from "path";
+import { existsSync, mkdirSync } from "fs";
 import { ErrorSolution, SolutionSearchResult, ErrorType, SearchOptions } from "./types.js";
 import {
   generateSolutionEmbedding,
@@ -17,10 +17,7 @@ import {
 const DB_DIR = join(homedir(), ".context8");
 const DB_PATH = join(DB_DIR, "solutions.db");
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-let sqlPromise: Promise<SqlJsStatic> | null = null;
-let db: SqlJsDatabase | null = null;
+let db: BetterSqlite3Database | null = null;
 
 export interface DatabaseHealth {
   ok: boolean;
@@ -30,22 +27,23 @@ export interface DatabaseHealth {
   issues?: string[];
 }
 
-async function loadSql(): Promise<SqlJsStatic> {
-  if (!sqlPromise) {
-    const wasmPath = join(__dirname, "../../node_modules/sql.js/dist/sql-wasm.wasm");
-    sqlPromise = initSqlJs({
-      locateFile: () => wasmPath,
-    });
+function openDatabase(): BetterSqlite3Database {
+  if (db) return db;
+
+  if (!existsSync(DB_DIR)) {
+    mkdirSync(DB_DIR, { recursive: true });
   }
-  return sqlPromise;
+
+  db = new Database(DB_PATH, { timeout: 5000 }) as BetterSqlite3Database;
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
+  db.pragma("synchronous = NORMAL");
+  ensureSchema(db);
+
+  return db;
 }
 
-function persistDatabase(database: SqlJsDatabase): void {
-  const data = database.export();
-  writeFileSync(DB_PATH, Buffer.from(data));
-}
-
-function ensureSchema(database: SqlJsDatabase): void {
+function ensureSchema(database: BetterSqlite3Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS solutions (
       id TEXT PRIMARY KEY,
@@ -63,18 +61,6 @@ function ensureSchema(database: SqlJsDatabase): void {
       environment TEXT
     );
   `);
-
-  try {
-    database.exec(`ALTER TABLE solutions ADD COLUMN embedding BLOB;`);
-  } catch {
-    // Column already exists.
-  }
-
-  try {
-    database.exec(`ALTER TABLE solutions ADD COLUMN environment TEXT;`);
-  } catch {
-    // Column already exists.
-  }
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS solution_stats (
@@ -99,26 +85,8 @@ function ensureSchema(database: SqlJsDatabase): void {
 /**
  * Initialize the database and create tables if they don't exist.
  */
-export async function initDatabase(): Promise<SqlJsDatabase> {
-  if (db) return db;
-
-  if (!existsSync(DB_DIR)) {
-    mkdirSync(DB_DIR, { recursive: true });
-  }
-
-  const SQL = await loadSql();
-
-  if (existsSync(DB_PATH)) {
-    const fileBuffer = readFileSync(DB_PATH);
-    db = new SQL.Database(new Uint8Array(fileBuffer));
-  } else {
-    db = new SQL.Database();
-  }
-
-  ensureSchema(db);
-  persistDatabase(db);
-
-  return db;
+export async function initDatabase(): Promise<BetterSqlite3Database> {
+  return openDatabase();
 }
 
 /**
@@ -128,69 +96,6 @@ function generateId(): string {
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 8);
   return `${timestamp}-${random}`;
-}
-
-/**
- * Save a new error solution to the database with embedding
- */
-export async function saveSolution(
-  solution: Omit<ErrorSolution, "id" | "createdAt">
-): Promise<ErrorSolution> {
-  const database = await initDatabase();
-
-  const id = generateId();
-  const createdAt = new Date().toISOString();
-
-  const environmentText = solution.environment ? JSON.stringify(solution.environment) : "";
-
-  const embedding = await generateSolutionEmbedding({
-    title: solution.title,
-    errorMessage: solution.errorMessage,
-    context: solution.context,
-    rootCause: solution.rootCause,
-    solution: solution.solution,
-    tags: solution.tags,
-    environmentText,
-  });
-
-  const embeddingBuffer = serializeEmbedding(embedding);
-
-  const stmt = database.prepare(`
-    INSERT INTO solutions (id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, embedding, environment)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run([
-    id,
-    solution.title,
-    solution.errorMessage,
-    solution.errorType,
-    solution.context,
-    solution.rootCause,
-    solution.solution,
-    solution.codeChanges || null,
-    JSON.stringify(solution.tags),
-    createdAt,
-    solution.projectPath || null,
-    new Uint8Array(embeddingBuffer),
-    solution.environment ? JSON.stringify(solution.environment) : null,
-  ]);
-  stmt.free();
-
-  await updateSparseIndexForSolution(database, {
-    id,
-    ...solution,
-    createdAt,
-  });
-
-  persistDatabase(database);
-
-  return {
-    id,
-    ...solution,
-    createdAt,
-    environment: solution.environment,
-  };
 }
 
 const STOP_WORDS = new Set([
@@ -269,80 +174,70 @@ function mapRowToSolution(row: any): ErrorSolution {
   };
 }
 
-async function updateSparseIndexForSolution(
-  database: SqlJsDatabase,
-  solution: ErrorSolution
-): Promise<void> {
+function updateSparseIndexForSolution(database: BetterSqlite3Database, solution: ErrorSolution): void {
   const tokens = tokenize(indexableTextFromSolution(solution));
   const docLength = Math.max(tokens.length, 1);
-
-  const deleteIndexStmt = database.prepare("DELETE FROM inverted_index WHERE solution_id = ?");
-  deleteIndexStmt.run([solution.id]);
-  deleteIndexStmt.free();
-
-  const deleteStatsStmt = database.prepare("DELETE FROM solution_stats WHERE solution_id = ?");
-  deleteStatsStmt.run([solution.id]);
-  deleteStatsStmt.free();
 
   const termCounts = new Map<string, number>();
   tokens.forEach((token) => {
     termCounts.set(token, (termCounts.get(token) || 0) + 1);
   });
 
+  const deleteIndexStmt = database.prepare("DELETE FROM inverted_index WHERE solution_id = ?");
+  const deleteStatsStmt = database.prepare("DELETE FROM solution_stats WHERE solution_id = ?");
   const insertTermStmt = database.prepare(
     "INSERT INTO inverted_index (term, solution_id, term_freq) VALUES (?, ?, ?)"
   );
-  for (const [term, count] of termCounts.entries()) {
-    insertTermStmt.run([term, solution.id, count]);
-  }
-  insertTermStmt.free();
-
   const insertStatsStmt = database.prepare(
     "INSERT INTO solution_stats (solution_id, doc_length) VALUES (?, ?)"
   );
-  insertStatsStmt.run([solution.id, docLength]);
-  insertStatsStmt.free();
+
+  const tx = database.transaction(() => {
+    deleteIndexStmt.run(solution.id);
+    deleteStatsStmt.run(solution.id);
+    for (const [term, count] of termCounts.entries()) {
+      insertTermStmt.run(term, solution.id, count);
+    }
+    insertStatsStmt.run(solution.id, docLength);
+  });
+
+  tx();
 }
 
-async function ensureSparseIndex(database: SqlJsDatabase): Promise<void> {
-  const countStmt = database.prepare("SELECT COUNT(*) as count FROM inverted_index");
-  const countRow = countStmt.step() ? (countStmt.getAsObject() as any) : { count: 0 };
-  countStmt.free();
+function ensureSparseIndex(database: BetterSqlite3Database): void {
+  const row = database.prepare("SELECT COUNT(*) as count FROM inverted_index").get() as {
+    count: number;
+  };
+  if (row && row.count > 0) return;
 
-  if (countRow.count > 0) {
-    return;
+  const solutions = database
+    .prepare(
+      `SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment FROM solutions`
+    )
+    .all();
+
+  for (const row of solutions) {
+    updateSparseIndexForSolution(database, mapRowToSolution(row));
   }
-
-  const stmt = database.prepare(`
-    SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
-    FROM solutions
-  `);
-
-  while (stmt.step()) {
-    const solution = mapRowToSolution(stmt.getAsObject());
-    await updateSparseIndexForSolution(database, solution);
-  }
-  stmt.free();
-  persistDatabase(database);
 }
 
-async function searchSolutionsSparseInternal(
+function searchSolutionsSparseInternal(
   query: string,
   limit: number
-): Promise<Array<{ id: string; score: number }>> {
-  const database = await initDatabase();
-  await ensureSparseIndex(database);
+): Array<{ id: string; score: number }> {
+  const database = openDatabase();
+  ensureSparseIndex(database);
 
   const terms = tokenize(query);
   if (terms.length === 0) return [];
 
-  const statsStmt = database.prepare("SELECT solution_id, doc_length FROM solution_stats");
   const docLengths = new Map<string, number>();
-  while (statsStmt.step()) {
-    const row = statsStmt.getAsObject() as any;
-    docLengths.set(row.solution_id, row.doc_length || 1);
-  }
-  statsStmt.free();
+  database
+    .prepare("SELECT solution_id, doc_length FROM solution_stats")
+    .all()
+    .forEach((row: any) => {
+      docLengths.set(row.solution_id, row.doc_length || 1);
+    });
 
   const totalDocs = docLengths.size || 1;
   const avgDocLength =
@@ -361,20 +256,16 @@ async function searchSolutionsSparseInternal(
   const b = 0.75;
 
   for (const term of terms) {
-    dfStmt.bind([term]);
-    const dfRow = dfStmt.step() ? (dfStmt.getAsObject() as any) : { df: 0 };
-    dfStmt.reset();
-
-    const df = dfRow.df || 0;
+    const dfRow = dfStmt.get(term) as { df: number } | undefined;
+    const df = dfRow?.df || 0;
     if (df === 0) continue;
 
     const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
 
-    termPostingStmt.bind([term]);
-    while (termPostingStmt.step()) {
-      const row = termPostingStmt.getAsObject() as any;
-      const docId = row.solution_id as string;
-      const termFreq = row.term_freq as number;
+    const postings = termPostingStmt.all(term) as Array<{ solution_id: string; term_freq: number }>;
+    for (const row of postings) {
+      const docId = row.solution_id;
+      const termFreq = row.term_freq;
       const docLen = docLengths.get(docId) || 1;
 
       const norm = termFreq * (k1 + 1);
@@ -382,18 +273,78 @@ async function searchSolutionsSparseInternal(
       const score = idf * (norm / denom);
       scores.set(docId, (scores.get(docId) || 0) + score);
     }
-    termPostingStmt.reset();
   }
 
-  termPostingStmt.free();
-  dfStmt.free();
-
-  const ranked = Array.from(scores.entries())
+  return Array.from(scores.entries())
     .map(([id, score]) => ({ id, score }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
 
-  return ranked;
+/**
+ * Save a new error solution to the database with embedding
+ */
+export async function saveSolution(
+  solution: Omit<ErrorSolution, "id" | "createdAt">
+): Promise<ErrorSolution> {
+  const database = openDatabase();
+
+  const id = generateId();
+  const createdAt = new Date().toISOString();
+
+  const environmentText = solution.environment ? JSON.stringify(solution.environment) : "";
+
+  const embedding = await generateSolutionEmbedding({
+    title: solution.title,
+    errorMessage: solution.errorMessage,
+    context: solution.context,
+    rootCause: solution.rootCause,
+    solution: solution.solution,
+    tags: solution.tags,
+    environmentText,
+  });
+
+  const embeddingBuffer = Buffer.from(new Uint8Array(serializeEmbedding(embedding)));
+
+  const insertSolution = database.prepare(
+    `
+    INSERT INTO solutions (id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, embedding, environment)
+    VALUES (@id, @title, @error_message, @error_type, @context, @root_cause, @solution, @code_changes, @tags, @created_at, @project_path, @embedding, @environment)
+  `
+  );
+
+  const tx = database.transaction(() => {
+    insertSolution.run({
+      id,
+      title: solution.title,
+      error_message: solution.errorMessage,
+      error_type: solution.errorType,
+      context: solution.context,
+      root_cause: solution.rootCause,
+      solution: solution.solution,
+      code_changes: solution.codeChanges || null,
+      tags: JSON.stringify(solution.tags),
+      created_at: createdAt,
+      project_path: solution.projectPath || null,
+      embedding: embeddingBuffer,
+      environment: solution.environment ? JSON.stringify(solution.environment) : null,
+    });
+
+    updateSparseIndexForSolution(database, {
+      id,
+      ...solution,
+      createdAt,
+    });
+  });
+
+  tx();
+
+  return {
+    id,
+    ...solution,
+    createdAt,
+    environment: solution.environment,
+  };
 }
 
 /**
@@ -404,9 +355,9 @@ export async function searchSolutionsSemantic(
   limit: number = 25,
   candidateIds?: string[]
 ): Promise<SolutionSearchResult[]> {
-  const database = await initDatabase();
+  const database = openDatabase();
 
-  const rows: Array<{
+  let rows: Array<{
     id: string;
     title: string;
     error_type: string;
@@ -414,7 +365,7 @@ export async function searchSolutionsSemantic(
     context: string;
     tags: string;
     created_at: string;
-    embedding: Uint8Array;
+    embedding: Buffer | null;
   }> = [];
 
   if (candidateIds && candidateIds.length === 0) {
@@ -423,26 +374,25 @@ export async function searchSolutionsSemantic(
 
   if (candidateIds && candidateIds.length > 0) {
     const placeholders = candidateIds.map(() => "?").join(",");
-    const stmt = database.prepare(`
-      SELECT id, title, error_type, error_message, context, tags, created_at, embedding
-      FROM solutions
-      WHERE embedding IS NOT NULL AND id IN (${placeholders})
-    `);
-    stmt.bind(candidateIds);
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject() as any);
-    }
-    stmt.free();
+    rows = database
+      .prepare(
+        `
+        SELECT id, title, error_type, error_message, context, tags, created_at, embedding
+        FROM solutions
+        WHERE embedding IS NOT NULL AND id IN (${placeholders})
+      `
+      )
+      .all(...candidateIds) as any;
   } else {
-    const stmt = database.prepare(`
-      SELECT id, title, error_type, error_message, context, tags, created_at, embedding
-      FROM solutions
-      WHERE embedding IS NOT NULL
-    `);
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject() as any);
-    }
-    stmt.free();
+    rows = database
+      .prepare(
+        `
+        SELECT id, title, error_type, error_message, context, tags, created_at, embedding
+        FROM solutions
+        WHERE embedding IS NOT NULL
+      `
+      )
+      .all() as any;
   }
 
   if (rows.length === 0) {
@@ -453,7 +403,7 @@ export async function searchSolutionsSemantic(
 
   const results = rows
     .map((row) => {
-      const solutionEmbedding = deserializeEmbedding(Buffer.from(row.embedding));
+      const solutionEmbedding = deserializeEmbedding(row.embedding as Buffer);
       const similarity = cosineSimilarity(queryEmbedding, solutionEmbedding);
 
       const preview =
@@ -479,13 +429,13 @@ export async function searchSolutionsSemantic(
 }
 
 /**
- * Fallback FTS search
+ * Fallback LIKE search
  */
 export async function searchSolutionsFTS(
   query: string,
   limit: number = 10
 ): Promise<SolutionSearchResult[]> {
-  const database = await initDatabase();
+  const database = openDatabase();
 
   const terms = query
     .replace(/['"]/g, "")
@@ -494,27 +444,16 @@ export async function searchSolutionsFTS(
     .filter((term) => term.length > 0);
 
   if (terms.length === 0) {
-    const stmt = database.prepare(`
-      SELECT id, title, error_type, error_message, context, tags, created_at
-      FROM solutions
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-
-    const rows: Array<{
-      id: string;
-      title: string;
-      error_type: string;
-      error_message: string;
-      context: string;
-      tags: string;
-      created_at: string;
-    }> = [];
-
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject() as any);
-    }
-    stmt.free();
+    const rows = database
+      .prepare(
+        `
+        SELECT id, title, error_type, error_message, context, tags, created_at
+        FROM solutions
+        ORDER BY created_at DESC
+        LIMIT ?
+      `
+      )
+      .all(limit) as any[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -544,30 +483,17 @@ export async function searchSolutionsFTS(
   });
   params.push(limit);
 
-  const stmt = database.prepare(`
-    SELECT id, title, error_type, error_message, context, tags, created_at
-    FROM solutions
-    WHERE ${likeClauses}
-    ORDER BY created_at DESC
-    LIMIT ?
-  `);
-
-  stmt.bind(params);
-
-  const rows: Array<{
-    id: string;
-    title: string;
-    error_type: string;
-    error_message: string;
-    context: string;
-    tags: string;
-    created_at: string;
-  }> = [];
-
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as any);
-  }
-  stmt.free();
+  const rows = database
+    .prepare(
+      `
+      SELECT id, title, error_type, error_message, context, tags, created_at
+      FROM solutions
+      WHERE ${likeClauses}
+      ORDER BY created_at DESC
+      LIMIT ?
+    `
+    )
+    .all(...params) as any[];
 
   return rows.map((row) => ({
     id: row.id,
@@ -587,7 +513,7 @@ async function searchSolutionsSparse(
   query: string,
   limit: number = 25
 ): Promise<SolutionSearchResult[]> {
-  const sparseResults = await searchSolutionsSparseInternal(query, Math.max(limit, 100));
+  const sparseResults = searchSolutionsSparseInternal(query, Math.max(limit, 100));
   if (sparseResults.length === 0) return [];
 
   const solutionIds = sparseResults.map((r) => r.id);
@@ -620,7 +546,7 @@ async function searchSolutionsHybrid(
   const sparseWeight = options.sparseWeight ?? 0.3;
   const coarseLimit = options.coarseLimit ?? Math.max(limit * 5, 200);
 
-  const sparseCandidates = await searchSolutionsSparseInternal(query, coarseLimit);
+  const sparseCandidates = searchSolutionsSparseInternal(query, coarseLimit);
   const candidateIds = sparseCandidates.map((r) => r.id);
 
   const denseCandidates = candidateIds.length
@@ -684,32 +610,29 @@ export async function searchSolutionsByVector(
     );
   }
 
-  const database = await initDatabase();
-  const stmt = database.prepare(`
-    SELECT id, title, error_type, error_message, context, tags, created_at, embedding
-    FROM solutions
-    WHERE embedding IS NOT NULL
-  `);
+  const database = openDatabase();
+  const rows = database
+    .prepare(
+      `
+      SELECT id, title, error_type, error_message, context, tags, created_at, embedding
+      FROM solutions
+      WHERE embedding IS NOT NULL
+    `
+    )
+    .all() as Array<{
+      id: string;
+      title: string;
+      error_type: string;
+      error_message: string;
+      context: string;
+      tags: string;
+      created_at: string;
+      embedding: Buffer;
+    }>;
 
-  const rows: Array<{
-    id: string;
-    title: string;
-    error_type: string;
-    error_message: string;
-    context: string;
-    tags: string;
-    created_at: string;
-    embedding: Uint8Array;
-  }> = [];
-
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as any);
-  }
-  stmt.free();
-
-  const results = rows
+  return rows
     .map((row) => {
-      const solutionEmbedding = deserializeEmbedding(Buffer.from(row.embedding));
+      const solutionEmbedding = deserializeEmbedding(row.embedding);
       const similarity = cosineSimilarity(embedding, solutionEmbedding);
       const preview = buildPreview(row.error_message, row.context);
 
@@ -725,8 +648,6 @@ export async function searchSolutionsByVector(
     })
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, limit);
-
-  return results;
 }
 
 /**
@@ -756,120 +677,72 @@ export async function searchSolutions(
  * Get a solution by ID
  */
 export async function getSolutionById(id: string): Promise<ErrorSolution | null> {
-  const database = await initDatabase();
+  const database = openDatabase();
 
-  const stmt = database.prepare(`
+  const row = database
+    .prepare(
+      `
     SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
     FROM solutions WHERE id = ?
-  `);
-
-  stmt.bind([id]);
-  const row = stmt.step() ? (stmt.getAsObject() as any) : null;
-  stmt.free();
+  `
+    )
+    .get(id);
 
   if (!row) return null;
 
-  return {
-    id: row.id,
-    title: row.title,
-    errorMessage: row.error_message,
-    errorType: row.error_type as ErrorType,
-    context: row.context,
-    rootCause: row.root_cause,
-    solution: row.solution,
-    codeChanges: row.code_changes || undefined,
-    tags: JSON.parse(row.tags),
-    createdAt: row.created_at,
-    projectPath: row.project_path || undefined,
-    environment: row.environment ? JSON.parse(row.environment) : undefined,
-  };
+  return mapRowToSolution(row);
 }
 
 /**
  * Get multiple solutions by IDs
  */
 export async function getSolutionsByIds(ids: string[]): Promise<ErrorSolution[]> {
-  const database = await initDatabase();
+  const database = openDatabase();
 
   if (ids.length === 0) return [];
 
   const placeholders = ids.map(() => "?").join(",");
-  const stmt = database.prepare(`
-    SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
-    FROM solutions WHERE id IN (${placeholders})
-  `);
+  const rows = database
+    .prepare(
+      `
+      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
+      FROM solutions WHERE id IN (${placeholders})
+    `
+    )
+    .all(...ids);
 
-  stmt.bind(ids);
-
-  const rows: Array<{
-    id: string;
-    title: string;
-    error_message: string;
-    error_type: string;
-    context: string;
-    root_cause: string;
-    solution: string;
-    code_changes: string | null;
-    tags: string;
-    created_at: string;
-    project_path: string | null;
-    environment: string | null;
-  }> = [];
-
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as any);
-  }
-  stmt.free();
-
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    errorMessage: row.error_message,
-    errorType: row.error_type as ErrorType,
-    context: row.context,
-    rootCause: row.root_cause,
-    solution: row.solution,
-    codeChanges: row.code_changes || undefined,
-    tags: JSON.parse(row.tags),
-    createdAt: row.created_at,
-    projectPath: row.project_path || undefined,
-    environment: row.environment ? JSON.parse(row.environment) : undefined,
-  }));
+  return rows.map(mapRowToSolution);
 }
 
 /**
  * Get total count of solutions
  */
 export async function getSolutionCount(): Promise<number> {
-  const database = await initDatabase();
-  const stmt = database.prepare("SELECT COUNT(*) as count FROM solutions");
-  const row = stmt.step() ? (stmt.getAsObject() as { count: number }) : { count: 0 };
-  stmt.free();
-  return row.count;
+  const database = openDatabase();
+  const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as { count: number };
+  return row?.count || 0;
 }
 
 /**
  * Delete a solution by ID
  */
 export async function deleteSolution(id: string): Promise<boolean> {
-  const database = await initDatabase();
-  const stmt = database.prepare("DELETE FROM solutions WHERE id = ?");
-  stmt.run([id]);
-  const changes = database.getRowsModified();
-  stmt.free();
-  if (changes > 0) {
-    const delIndex = database.prepare("DELETE FROM inverted_index WHERE solution_id = ?");
-    delIndex.run([id]);
-    delIndex.free();
+  const database = openDatabase();
 
-    const delStats = database.prepare("DELETE FROM solution_stats WHERE solution_id = ?");
-    delStats.run([id]);
-    delStats.free();
+  const delSolution = database.prepare("DELETE FROM solutions WHERE id = ?");
+  const delIndex = database.prepare("DELETE FROM inverted_index WHERE solution_id = ?");
+  const delStats = database.prepare("DELETE FROM solution_stats WHERE solution_id = ?");
 
-    persistDatabase(database);
-    return true;
-  }
-  return false;
+  const tx = database.transaction((solutionId: string) => {
+    const res = delSolution.run(solutionId);
+    delIndex.run(solutionId);
+    delStats.run(solutionId);
+    return res.changes;
+  });
+
+  const changes = tx(id);
+
+  return (changes || 0) > 0;
 }
 
 /**
@@ -896,60 +769,29 @@ export async function listSolutions(
   limit: number = 50,
   offset: number = 0
 ): Promise<ErrorSolution[]> {
-  const database = await initDatabase();
-  const stmt = database.prepare(`
-    SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
-    FROM solutions
-    ORDER BY created_at DESC
-    LIMIT ? OFFSET ?
-  `);
-  stmt.bind([limit, offset]);
+  const database = openDatabase();
+  const rows = database
+    .prepare(
+      `
+      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
+      FROM solutions
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `
+    )
+    .all(limit, offset);
 
-  const rows: Array<{
-    id: string;
-    title: string;
-    error_message: string;
-    error_type: string;
-    context: string;
-    root_cause: string;
-    solution: string;
-    code_changes: string | null;
-    tags: string;
-    created_at: string;
-    project_path: string | null;
-    environment: string | null;
-  }> = [];
-
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as any);
-  }
-  stmt.free();
-
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    errorMessage: row.error_message,
-    errorType: row.error_type as ErrorType,
-    context: row.context,
-    rootCause: row.root_cause,
-    solution: row.solution,
-    codeChanges: row.code_changes || undefined,
-    tags: JSON.parse(row.tags),
-    createdAt: row.created_at,
-    projectPath: row.project_path || undefined,
-    environment: row.environment ? JSON.parse(row.environment) : undefined,
-  }));
+  return rows.map(mapRowToSolution);
 }
 
+/**
+ * Health check: schema columns and row count
+ */
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
-  const issues: string[] = [];
   try {
-    const database = await initDatabase();
-    const tableInfo = database.exec("PRAGMA table_info(solutions);");
-    const columns =
-      tableInfo.length > 0
-        ? tableInfo[0].values.map((row) => (row[1] as string | undefined) || "").filter(Boolean)
-        : [];
+    const database = openDatabase();
+    const tableInfo = database.prepare("PRAGMA table_info(solutions);").all();
+    const columns = tableInfo.map((row: any) => row.name as string);
     const requiredColumns = [
       "id",
       "title",
@@ -961,32 +803,25 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
       "tags",
       "created_at",
     ];
+    const issues: string[] = [];
     for (const col of requiredColumns) {
       if (!columns.includes(col)) issues.push(`missing column: ${col}`);
     }
-    const count = await getSolutionCount();
-    const path = getDatabasePath();
-    if (issues.length > 0) {
-      return {
-        ok: false,
-        message: `Database has issues: ${issues.join(", ")}`,
-        path,
-        count,
-        issues,
-      };
-    }
+
+    const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as { count: number };
+
     return {
-      ok: true,
-      message: "Database is healthy",
-      path,
-      count,
+      ok: issues.length === 0,
+      message: issues.length === 0 ? "Database is healthy" : "Schema issues detected",
+      path: DB_PATH,
+      count: row?.count || 0,
+      issues: issues.length ? issues : undefined,
     };
   } catch (error) {
     return {
       ok: false,
-      message: `Database check failed: ${error instanceof Error ? error.message : "unknown error"}`,
-      path: getDatabasePath(),
-      issues: [error instanceof Error ? error.message : "unknown error"],
+      message: error instanceof Error ? error.message : "unknown database error",
+      path: DB_PATH,
     };
   }
 }
