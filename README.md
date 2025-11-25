@@ -1,99 +1,67 @@
+![Cover](public/cover.png)
+
 # Context8 MCP – Local Error Solution Vault
 
-[![NPM Version](https://img.shields.io/npm/v/context8-mcp?color=red)](https://www.npmjs.com/package/context8-mcp) [![MIT licensed](https://img.shields.io/npm/l/context8-mcp)](./LICENSE) [![Repo](https://img.shields.io/badge/GitHub-PangYuanbo%2Fcontext8-blue)](https://github.com/PangYuanbo/context8)
+[![NPM Version](https://img.shields.io/npm/v/context8-mcp?color=red)](https://www.npmjs.com/package/context8-mcp) [![MIT licensed](https://img.shields.io/npm/l/context8-mcp)](./LICENSE)
 
-Context8 is a local-first MCP server for saving, searching, and reusing debugging solutions. It stores errors, root causes, fixes, and environment versions on your machine with hybrid (semantic + keyword) search—no external APIs.
+Context8 是本地优先的错误解决方案仓库：保存错误、根因、修复和环境版本，提供语义 + 关键词混合搜索。存储在 `~/.context8/solutions.db`，无外部依赖。
 
-- 100% local storage: `~/.context8/solutions.db`
-- Dense + sparse hybrid search (MiniLM embeddings + BM25-style keywords)
-- Environment snapshot required (Node/OS/dependency versions) to save
-- CLI included for listing and deleting records
+- SQLite（better-sqlite3）+ WAL，支持多进程写入且不互相覆盖
+- 混合搜索：MiniLM 384d + BM25 样式倒排索引
+- 自动迁移守护：`context8-mcp update` 确保 schema/WAL/索引
 
-## Installation
+## 要求
 
-### Mode 1: Context8 CLI (global install)
+- Node.js ≥ 18
+- MCP 客户端（Claude Code、Codex 等）
 
-```bash
-npm install -g context8-mcp
+## 安装（只列 Codex / Claude Code）
+
+### Codex（本地 stdio）
+
+在 Codex 配置中添加：
+
+```toml
+[mcp_servers.context8]
+command = "npx"
+args = ["-y", "context8-mcp"]
+startup_timeout_ms = 20000
 ```
 
-### Mode 2: npx (no global install)
+可选环境变量：
+```
+CONTEXT7_API_KEY=...   # 如需调用 context7-cached-docs
+CONTEXT8_REMOTE_URL=... # 如需远端模式
+CONTEXT8_REMOTE_API_KEY=...
+```
+
+### Claude Code（本地 stdio）
 
 ```bash
+claude mcp add context8 -- npx -y context8-mcp
+```
+
+## 可用工具
+
+- `save-error-solution`
+- `search-solutions`
+- `get-solution-detail`
+- `batch-get-solutions`
+- `delete-solution`
+- `context7-cached-docs`（需版本化库 ID，如 `/vercel/next.js/v15.1.8`）
+
+## 数据与存储
+
+- DB：`~/.context8/solutions.db`（better-sqlite3，WAL）
+- 删除会同步清理倒排索引与统计
+- `update` 会先运行迁移/健康检查后再检查 npm 更新
+
+## 开发
+
+```bash
+npm install
+npm run build
 npx context8-mcp --help
 ```
 
-Data persists at `~/.context8/solutions.db` (auto-created on first run).
-
-### Vibe / Claude Code–style MCP config
-
-Global install path:
-
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "node",
-      "args": ["$(npm root -g)/context8-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-If installed locally, replace the args path with your project’s absolute `dist/index.js`.
-
-npx mode (no global install):
-
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "npx",
-      "args": ["context8-mcp"]
-    }
-  }
-}
-```
-
-Both modes share the same DB at `~/.context8/solutions.db`.
-
-Context7 passthrough (for `context7-cached-docs`):
-
-- Set `CONTEXT7_API_KEY` in the MCP env (recommended for remote endpoint).
-- Optional: override endpoint with `CONTEXT7_ENDPOINT` (e.g., `http://localhost:3100/mcp` if you run Context7 locally).
-
-## Available tools
-
-- `save-error-solution`: Save error/root cause/solution/tags/environment (fails if versions are missing).
-- `search-solutions`: Hybrid search (`mode`: hybrid/semantic/sparse), returns scores and previews.
-- `get-solution-detail`: Fetch full detail by ID.
-- `batch-get-solutions`: Fetch multiple solutions (1–10 IDs).
-- `delete-solution`: Remove a record by ID (cleans inverted index + stats).
-- `context7-cached-docs`: Fetch Context7 docs with local cache. Always use versioned IDs (e.g., /vercel/next.js/v15.1.8). Optional env: CONTEXT7_API_KEY, CONTEXT7_ENDPOINT.
-
-## CLI (no MCP client needed)
-
-- List: `context8-mcp list --limit 20 --offset 0`
-- Delete: `context8-mcp delete <id>`
-- Update check: `context8-mcp update`
-  - Runs a DB health check first (ensures schema/columns exist); warns if issues detected.
-
-## Data & storage
-
-- DB: `~/.context8/solutions.db` (SQLite via better-sqlite3, WAL enabled for multi-process safety)
-- Embeddings: MiniLM 384d; default hybrid weights 0.7 (dense) / 0.3 (sparse)
-- Writes persist to disk; delete cleans inverted index + stats
-- Native module: `better-sqlite3` (prebuilt binaries for common platforms)
-- Upgrade path: `context8-mcp update` now runs a migration guard (ensure schema, WAL, sparse index) before checking npm updates.
-
-## Quick start
-
-1. `npm install -g context8-mcp`
-2. Configure MCP with `command: node`, `args: ["$(npm root -g)/context8-mcp/dist/index.js"]`
-3. Save an error with `save-error-solution` (include dependency versions)
-4. Search with `search-solutions` (hybrid mode)
-
-## Contributing
-
-PRs welcome: https://github.com/PangYuanbo/context8  
-License: MIT
+许可证：MIT
