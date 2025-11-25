@@ -18,6 +18,7 @@ import {
   listSolutions,
   deleteSolution,
   checkDatabaseHealth,
+  migrateDatabase,
 } from "./lib/database.js";
 import {
   getCachedContext7Doc,
@@ -891,6 +892,13 @@ async function runCli(argv: string[]) {
     .description("Check for a newer published version and install it (npm -g)")
     .option("-p, --package <name>", "Package name", pkgJson.name)
     .action(async (opts) => {
+      try {
+        migrateDatabase();
+        console.log("DB migration check: schema/index ensured.");
+      } catch (err) {
+        console.warn(`DB migration step failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      }
+
       try {
         const health = await checkDatabaseHealth();
         if (health.ok) {

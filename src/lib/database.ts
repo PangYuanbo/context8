@@ -763,6 +763,16 @@ export function closeDatabase(): void {
 }
 
 /**
+ * Migration helper: ensure schema, WAL, and sparse index.
+ * Safe to run multiple times; idempotent.
+ */
+export function migrateDatabase(): void {
+  const database = openDatabase();
+  ensureSchema(database);
+  ensureSparseIndex(database);
+}
+
+/**
  * List solutions (recent first) for CLI utilities
  */
 export async function listSolutions(

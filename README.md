@@ -84,6 +84,7 @@ Context7 passthrough (for `context7-cached-docs`):
 - Embeddings: MiniLM 384d; default hybrid weights 0.7 (dense) / 0.3 (sparse)
 - Writes persist to disk; delete cleans inverted index + stats
 - Native module: `better-sqlite3` (prebuilt binaries for common platforms)
+- Upgrade path: `context8-mcp update` now runs a migration guard (ensure schema, WAL, sparse index) before checking npm updates.
 
 ## Quick start
 
