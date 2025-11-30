@@ -58,9 +58,13 @@ function ensureSchema(database: BetterSqlite3Database): void {
       created_at TEXT NOT NULL,
       project_path TEXT,
       embedding BLOB,
-      environment TEXT
+      environment TEXT,
+      labels TEXT,
+      cli_library_id TEXT
     );
   `);
+
+  ensureSolutionColumns(database);
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS solution_stats (
@@ -80,6 +84,23 @@ function ensureSchema(database: BetterSqlite3Database): void {
 
   database.exec(`CREATE INDEX IF NOT EXISTS idx_inverted_term ON inverted_index(term);`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_inverted_solution ON inverted_index(solution_id);`);
+}
+
+function ensureSolutionColumns(database: BetterSqlite3Database): void {
+  const existing = database.prepare("PRAGMA table_info(solutions);").all() as Array<{ name: string }>;
+  const names = new Set(existing.map((c) => c.name));
+
+  const columns: Array<{ name: string; ddl: string }> = [
+    { name: "environment", ddl: "ALTER TABLE solutions ADD COLUMN environment TEXT" },
+    { name: "labels", ddl: "ALTER TABLE solutions ADD COLUMN labels TEXT" },
+    { name: "cli_library_id", ddl: "ALTER TABLE solutions ADD COLUMN cli_library_id TEXT" },
+  ];
+
+  for (const column of columns) {
+    if (!names.has(column.name)) {
+      database.exec(column.ddl);
+    }
+  }
 }
 
 /**
@@ -134,6 +155,7 @@ function tokenize(text: string): string[] {
 
 function indexableTextFromSolution(solution: ErrorSolution): string {
   const environmentText = solution.environment ? JSON.stringify(solution.environment) : "";
+  const labelsText = solution.labels ? solution.labels.join(" ") : "";
   return [
     solution.title,
     solution.errorMessage,
@@ -141,6 +163,8 @@ function indexableTextFromSolution(solution: ErrorSolution): string {
     solution.rootCause,
     solution.solution,
     solution.tags.join(" "),
+    labelsText,
+    solution.cliLibraryId || "",
     environmentText,
   ]
     .filter(Boolean)
@@ -170,6 +194,8 @@ function mapRowToSolution(row: any): ErrorSolution {
     tags: JSON.parse(row.tags),
     createdAt: row.created_at,
     projectPath: row.project_path || undefined,
+    labels: row.labels ? JSON.parse(row.labels) : undefined,
+    cliLibraryId: row.cli_library_id || undefined,
     environment: row.environment ? JSON.parse(row.environment) : undefined,
   };
 }
@@ -212,7 +238,7 @@ function ensureSparseIndex(database: BetterSqlite3Database): void {
 
   const solutions = database
     .prepare(
-      `SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment FROM solutions`
+      `SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id FROM solutions`
     )
     .all();
 
@@ -301,6 +327,7 @@ export async function saveSolution(
     rootCause: solution.rootCause,
     solution: solution.solution,
     tags: solution.tags,
+    labelsText: solution.labels?.join(" "),
     environmentText,
   });
 
@@ -308,8 +335,8 @@ export async function saveSolution(
 
   const insertSolution = database.prepare(
     `
-    INSERT INTO solutions (id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, embedding, environment)
-    VALUES (@id, @title, @error_message, @error_type, @context, @root_cause, @solution, @code_changes, @tags, @created_at, @project_path, @embedding, @environment)
+    INSERT INTO solutions (id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, embedding, environment, labels, cli_library_id)
+    VALUES (@id, @title, @error_message, @error_type, @context, @root_cause, @solution, @code_changes, @tags, @created_at, @project_path, @embedding, @environment, @labels, @cli_library_id)
   `
   );
 
@@ -328,6 +355,8 @@ export async function saveSolution(
       project_path: solution.projectPath || null,
       embedding: embeddingBuffer,
       environment: solution.environment ? JSON.stringify(solution.environment) : null,
+      labels: solution.labels ? JSON.stringify(solution.labels) : null,
+      cli_library_id: solution.cliLibraryId || null,
     });
 
     updateSparseIndexForSolution(database, {
@@ -682,7 +711,7 @@ export async function getSolutionById(id: string): Promise<ErrorSolution | null>
   const row = database
     .prepare(
       `
-    SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
+    SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id
     FROM solutions WHERE id = ?
   `
     )
@@ -705,7 +734,7 @@ export async function getSolutionsByIds(ids: string[]): Promise<ErrorSolution[]>
   const rows = database
     .prepare(
       `
-      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
+      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id
       FROM solutions WHERE id IN (${placeholders})
     `
     )
@@ -782,7 +811,7 @@ export async function listSolutions(
   const rows = database
     .prepare(
       `
-      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment
+      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id
       FROM solutions
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
@@ -811,6 +840,9 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
       "solution",
       "tags",
       "created_at",
+      "environment",
+      "labels",
+      "cli_library_id",
     ];
     const issues: string[] = [];
     for (const col of requiredColumns) {

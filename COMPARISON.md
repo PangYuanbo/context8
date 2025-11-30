@@ -1,4 +1,4 @@
-# Context7 vs Context8 (ErrorSolver) Comparison
+# Context7 vs Context8 Comparison
 
 ## Overview
 
@@ -19,7 +19,7 @@ Both projects share the same foundational architecture:
 
 ### 1. Core Functionality
 
-| Feature              | Context7                      | Context8 (ErrorSolver)        |
+| Feature              | Context7                      | Context8        |
 | -------------------- | ----------------------------- | ----------------------------- |
 | **Primary Purpose**  | Query online documentation    | Manage local error solutions  |
 | **Data Source**      | External API (context7.com)   | Local SQLite database         |
@@ -33,7 +33,7 @@ Both projects share the same foundational architecture:
 1. `resolve-library-id` - Search for libraries and get Context7 IDs
 2. `get-library-docs` - Fetch documentation for a specific library
 
-#### Context8 (ErrorSolver) Tools:
+#### Context8 Tools:
 
 1. `save-error-solution` - Save error solutions to local database
 2. `search-solutions` - Search local solutions with semantic similarity
@@ -87,7 +87,7 @@ Both projects share the same foundational architecture:
 ```json
 {
   "mcpServers": {
-    "errorsolver": {
+    "context8": {
       "command": "node",
       "args": ["/path/to/context8/dist/index.js"]
     }
@@ -123,7 +123,7 @@ _No API key required!_
 - Exploring API references
 - Staying updated with library changes
 
-#### Context8 (ErrorSolver):
+#### Context8:
 
 - Building personal debugging knowledge base
 - Storing solutions to recurring errors
@@ -141,7 +141,7 @@ If you want both functionalities:
    {
      "mcpServers": {
        "context7": { "command": "node", "args": ["..."] },
-       "errorsolver": { "command": "node", "args": ["..."] }
+       "context8": { "command": "node", "args": ["..."] }
      }
    }
    ```
@@ -158,7 +158,7 @@ If you want both functionalities:
 - **Comprehensive**: Access to vast library documentation
 - **Dependency**: Requires internet and Context7 service availability
 
-### Context8 (ErrorSolver):
+### Context8:
 
 - **Private**: All data stays on your machine
 - **Personal**: Build your own knowledge base
@@ -177,6 +177,6 @@ If you want both functionalities:
 
 **Context7** is ideal for developers who need quick access to official library documentation and don't mind making API calls.
 
-**Context8 (ErrorSolver)** is perfect for developers who want to build a personal, private, searchable knowledge base of their debugging experiences without any external dependencies.
+**Context8** is perfect for developers who want to build a personal, private, searchable knowledge base of their debugging experiences without any external dependencies.
 
 Both can coexist and serve complementary purposes in your development workflow!

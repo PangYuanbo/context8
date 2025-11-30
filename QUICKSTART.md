@@ -1,6 +1,6 @@
-# ErrorSolver Quick Start Guide
+# Context8 Quick Start Guide
 
-Get up and running with ErrorSolver MCP Server in 5 minutes!
+Get up and running with Context8 MCP Server in 5 minutes!
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ Add this configuration:
 ```json
 {
   "mcpServers": {
-    "errorsolver": {
+    "context8": {
       "command": "node",
       "args": ["C:/Users/aaron/Desktop/MCP/context8/dist/index.js"]
     }
@@ -69,7 +69,7 @@ No solutions found for "react".
 Knowledge base contains 0 total solution(s).
 ```
 
-Perfect! Your ErrorSolver is ready.
+Perfect! Your Context8 is ready.
 
 ## Step 5: Save Your First Solution
 
@@ -130,8 +130,8 @@ Get me the full details for these solutions: abc123, def456, xyz789
 
 Your solutions are stored at:
 
-- **Windows**: `C:\Users\YourUsername\.errorsolver\solutions.db`
-- **macOS/Linux**: `~/.errorsolver/solutions.db`
+- **Windows**: `C:\Users\YourUsername\.context8\solutions.db`
+- **macOS/Linux**: `~/.context8/solutions.db`
 
 ## Tips for Best Results
 
@@ -183,7 +183,7 @@ The database is created automatically on first use. If you want to start fresh:
 
 ```bash
 # Backup first!
-rm ~/.errorsolver/solutions.db
+rm ~/.context8/solutions.db
 ```
 
 ## Example Workflow

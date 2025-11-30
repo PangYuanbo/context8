@@ -77,28 +77,25 @@ function collectEnvironmentSnapshot(): Record<string, unknown> {
   return snapshot;
 }
 
-function hasVersionInfo(env: Record<string, unknown> | undefined): boolean {
-  if (!env) return false;
-  const deps = env.dependencies as Record<string, string> | undefined;
-  const devDeps = env.devDependencies as Record<string, string> | undefined;
-  const values = [...(deps ? Object.values(deps) : []), ...(devDeps ? Object.values(devDeps) : [])];
-  return values.some((v) => typeof v === "string" && /\d/.test(v));
-}
-
-function versionIssues(
-  env: Record<string, unknown> | undefined
-): { ok: boolean; message?: string; missing?: string[] } {
-  if (!env) return { ok: false, message: "Environment object is missing" };
+function versionIssues(env: Record<string, unknown> | undefined): { warnings: string[] } {
+  const warnings: string[] = [];
+  if (!env) {
+    return {
+      warnings: [
+        "Environment snapshot missing; provide dependencies with versions to track applicability.",
+      ],
+    };
+  }
 
   const deps = (env.dependencies as Record<string, string> | undefined) || {};
   const devDeps = (env.devDependencies as Record<string, string> | undefined) || {};
   const entries = Object.entries({ ...deps, ...devDeps });
 
   if (entries.length === 0) {
-    return {
-      ok: false,
-      message: "No dependency versions found in environment (dependencies/devDependencies are empty)",
-    };
+    warnings.push(
+      "No dependency versions supplied (dependencies/devDependencies empty); add versioned entries if known."
+    );
+    return { warnings };
   }
 
   const badKeys: string[] = [];
@@ -113,22 +110,18 @@ function versionIssues(
   }
 
   if (!hasVersion) {
-    return {
-      ok: false,
-      message: "No dependency version strings detected (expected values like '19.0.0' or '^2.3.1')",
-      missing: badKeys,
-    };
+    warnings.push(
+      "Dependency versions not detected (expected values like '19.0.0' or '^2.3.1'); add version strings to improve matching."
+    );
+  }
+  if (badKeys.length) {
+    warnings.push(`Dependencies lacking numeric version: ${badKeys.join(", ")}`);
   }
 
-  return badKeys.length > 0
-    ? {
-        ok: true,
-        missing: badKeys,
-      }
-    : { ok: true };
+  return { warnings };
 }
 
-// Function to create a new server instance with all ErrorSolver tools registered
+// Function to create a new server instance with all Context8 tools registered
 function createServerInstance() {
   const remoteConfig: RemoteConfig | null =
     process.env.CONTEXT8_REMOTE_URL && process.env.CONTEXT8_REMOTE_API_KEY
@@ -151,7 +144,7 @@ function createServerInstance() {
     }
   );
 
-  // Register ErrorSolver tool: save-error-solution
+  // Register Context8 tool: save-error-solution
   server.registerTool(
     "save-error-solution",
     {
@@ -186,7 +179,12 @@ When recording solutions, you MUST follow these rules strictly:
    - Why it happened (root cause in technical terms)
    - How to fix it (generic solution pattern)
 
-The goal is to create reusable knowledge that helps solve similar technical problems without exposing any project details.`,
+The goal is to create reusable knowledge that helps solve similar technical problems without exposing any project details.
+
+Examples from your current vault (keep future entries equally abstract):
+- Title: "ScenegraphLayer fails with getVertexCount and Elevation fetch blocked" | Type: runtime | Tags: deck.gl, three.js, loaders.gl, gltf, obj, elevation api, cors | Context: Vite+TS map app loading photorealistic tiles and user-uploaded 3D models | Root cause: uploaded OBJ/GLB lacked triangulated POSITION data so loaders.gl couldn't compute vertices | Solution: normalize models to non-indexed triangles with POSITION, export GLB, use object URLs (revoke old ones) and fix CORS/elevation fetch.
+- Title: "Vite build fails: Loader type errors and instanceof union in deck.gl scenegraph" | Type: compile | Tags: typescript, vite, deck.gl, three.js, google-maps, build | Context: Vite TS build for deck.gl + Three app after adding search/elevation loaders | Root cause: union string|Blob|File was checked via instanceof without a guard | Solution: add a type guard for Blob/File, accept strings directly, avoid Loader.load when absent, simplify ScenegraphLayer source handling.
+- Title: "Modal deploy fails from missing dependencies and image mount misuse" | Type: configuration | Tags: modal, fastapi, deployment, python, sqlalchemy | Context: Deploying FastAPI service to Modal | Root cause: legacy Mount usage and env on function plus missing deps | Solution: use Image.add_local_dir(copy=true), set env on Image, keep add_local_dir last, add psycopg2-binary/evdev deps.`,
       inputSchema: {
         title: z
           .string()
@@ -292,36 +290,8 @@ The goal is to create reusable knowledge that helps solve similar technical prob
           : autoEnvironment;
 
         const versionCheck = versionIssues(mergedEnvironment);
-        if (!versionCheck.ok) {
-          const detail = versionCheck.missing && versionCheck.missing.length > 0
-            ? ` Missing/invalid versions for: ${versionCheck.missing.join(", ")}.`
-            : "";
-          throw new Error(
-            `Save aborted: ${versionCheck.message || "missing dependency version info."}${detail}`
-          );
-        } else if (versionCheck.missing && versionCheck.missing.length > 0) {
-          console.warn(
-            `Proceeding but some dependencies lack version patterns: ${versionCheck.missing.join(", ")}`
-          );
-        }
-
-        let cliNotes: string | undefined;
-        if (cliLibraryId) {
-          try {
-            cliNotes = await callContext7Tool(
-              "get-library-docs",
-              {
-                context7CompatibleLibraryID: cliLibraryId,
-                topic: "cli",
-                page: 1,
-              },
-              process.env.CONTEXT7_API_KEY
-            );
-          } catch (err) {
-            cliNotes = `Context7 CLI help fetch failed: ${
-              err instanceof Error ? err.message : "unknown error"
-            }`;
-          }
+        if (versionCheck.warnings.length > 0) {
+          console.warn(`Environment/version warnings: ${versionCheck.warnings.join(" | ")}`);
         }
 
         const savedSolution = remoteConfig
@@ -336,7 +306,6 @@ The goal is to create reusable knowledge that helps solve similar technical prob
               tags,
               labels,
               cliLibraryId,
-              cliNotes,
               projectPath,
               environment: mergedEnvironment,
             })
@@ -351,7 +320,6 @@ The goal is to create reusable knowledge that helps solve similar technical prob
               tags,
               labels,
               cliLibraryId,
-              cliNotes,
               projectPath,
               environment: mergedEnvironment,
             });
@@ -359,6 +327,11 @@ The goal is to create reusable knowledge that helps solve similar technical prob
         const totalCount = remoteConfig
           ? await remoteGetSolutionCount(remoteConfig)
           : await getSolutionCount();
+
+        const warningText =
+          versionCheck.warnings.length > 0
+            ? `\nWarnings:\n- ${versionCheck.warnings.join("\n- ")}`
+            : "";
 
         return {
           content: [
@@ -375,7 +348,7 @@ Location: ${getDatabasePath()}
 
 You can search for this solution later using 'search-solutions' with keywords like:
 - "${tags[0] || "error"}"
-- "${title.split(" ").slice(0, 3).join(" ")}"`,
+- "${title.split(" ").slice(0, 3).join(" ")}"${warningText}`,
             },
           ],
         };
@@ -392,7 +365,7 @@ You can search for this solution later using 'search-solutions' with keywords li
     }
   );
 
-  // Register ErrorSolver tool: search-solutions
+  // Register Context8 tool: search-solutions
   server.registerTool(
     "search-solutions",
     {
@@ -500,7 +473,7 @@ Select the most relevant solutions and use 'batch-get-solutions' with their IDs 
     }
   );
 
-  // Register ErrorSolver tool: get-solution-detail
+  // Register Context8 tool: get-solution-detail
   server.registerTool(
     "get-solution-detail",
     {
@@ -544,6 +517,8 @@ Use 'search-solutions' to find available solutions.`,
 - **Date:** ${new Date(solution.createdAt).toLocaleString()}
 - **Tags:** ${solution.tags.join(", ")}
 ${solution.projectPath ? `- **Project:** ${solution.projectPath}` : ""}
+${solution.labels?.length ? `- **Labels:** ${solution.labels.join(", ")}` : ""}
+${solution.cliLibraryId ? `- **CLI Library:** ${solution.cliLibraryId}` : ""}
 
 ## Error Message
 \`\`\`
@@ -589,7 +564,7 @@ ${solution.codeChanges}
     }
   );
 
-  // Register ErrorSolver tool: batch-get-solutions
+  // Register Context8 tool: batch-get-solutions
   server.registerTool(
     "batch-get-solutions",
     {
@@ -640,6 +615,8 @@ Use 'search-solutions' to find valid solution IDs.`,
 - **Date:** ${new Date(solution.createdAt).toLocaleString()}
 - **Tags:** ${solution.tags.join(", ")}
 ${solution.projectPath ? `- **Project:** ${solution.projectPath}` : ""}
+${solution.labels?.length ? `- **Labels:** ${solution.labels.join(", ")}` : ""}
+${solution.cliLibraryId ? `- **CLI Library:** ${solution.cliLibraryId}` : ""}
 
 ## Error Message
 \`\`\`
@@ -695,7 +672,7 @@ ${formattedSolutions}${notFoundMsg}`,
     }
   );
 
-  // Register ErrorSolver tool: delete-solution
+  // Register Context8 tool: delete-solution
   server.registerTool(
     "delete-solution",
     {

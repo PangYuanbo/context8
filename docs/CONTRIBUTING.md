@@ -1,6 +1,6 @@
-# Contributing to ErrorSolver
+# Contributing to Context8
 
-Thank you for your interest in contributing to ErrorSolver! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to Context8! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
@@ -189,4 +189,4 @@ Contributors will be recognized in:
 - CHANGELOG.md for specific contributions
 - GitHub contributors page
 
-Thank you for making ErrorSolver better! 🎉
+Thank you for making Context8 better! 🎉

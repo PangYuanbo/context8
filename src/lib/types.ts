@@ -11,7 +11,6 @@ export interface ErrorSolution {
   tags: string[];
   labels?: string[];
   cliLibraryId?: string;
-  cliNotes?: string;
   createdAt: string;
   projectPath?: string;
   environment?: Record<string, unknown>;

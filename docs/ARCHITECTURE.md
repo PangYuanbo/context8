@@ -1,10 +1,10 @@
-# ErrorSolver Architecture
+# Context8 Architecture
 
-This document describes the architecture and design decisions of the ErrorSolver MCP server.
+This document describes the architecture and design decisions of the Context8 MCP server.
 
 ## Overview
 
-ErrorSolver is a Model Context Protocol (MCP) server that provides a local, privacy-first knowledge base for storing and retrieving error solutions with semantic search capabilities.
+Context8 is a Model Context Protocol (MCP) server that provides a local, privacy-first knowledge base for storing and retrieving error solutions with semantic search capabilities.
 
 ## System Architecture
 
@@ -36,19 +36,21 @@ ErrorSolver is a Model Context Protocol (MCP) server that provides a local, priv
 └───────┬──────────┘    └──────────────────┘
         │
 ┌───────▼──────────────────────────┐
-│  ~/.errorsolver/solutions.db     │
+│  ~/.context8/solutions.db        │
 │                                   │
 │  Tables:                          │
 │  - solutions (main)               │
-│  - solutions_fts (full-text)      │
+│  - inverted_index (sparse)        │
+│  - solution_stats (length cache)  │
 │                                   │
 │  Fields:                          │
 │  - id, title, error_message       │
 │  - error_type, context            │
 │  - root_cause, solution           │
-│  - code_changes, tags             │
+│  - code_changes, tags, labels     │
+│  - cli_library_id                 │
 │  - created_at, project_path       │
-│  - embedding (BLOB)               │
+│  - embedding (BLOB), environment  │
 └───────────────────────────────────┘
 ```
 
@@ -240,7 +242,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 
 ### Data Privacy
 
-1. **Local Storage Only**: All data in `~/.errorsolver/solutions.db`
+1. **Local Storage Only**: All data in `~/.context8/solutions.db`
 2. **No Network Calls**: Zero external API usage
 3. **No Telemetry**: No tracking or analytics
 4. **User Control**: User owns and controls their data
