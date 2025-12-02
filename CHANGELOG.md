@@ -2,6 +2,20 @@
 
 All notable changes to the Context8 MCP Server will be documented in this file.
 
+## [1.0.3-beta.4] - 2025-12-01
+
+### Added
+- CLI `search` command (local or remote based on configuration) with mode selection.
+
+### Changed
+- Remote count calls use non-empty placeholder to avoid backend 422.
+- Remote request timeout now reads `CONTEXT8_REQUEST_TIMEOUT` (CLI `--timeout` effective).
+- Context7 cached docs tool only registers in local mode; remote mode disables cache.
+- README updated with API key acquisition (context8.org), remote config, and warnings about non-empty search queries.
+
+### Security
+- Reminder to set strong `JWT_SECRET`/related envs in cloud deployments (defaults are insecure).
+
 ## [1.0.3-beta.3] - 2025-11-30
 
 ### Changed
