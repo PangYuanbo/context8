@@ -33,7 +33,6 @@ import {
   remoteGetSolutionById,
   remoteGetSolutionsByIds,
   remoteDeleteSolution,
-  RemoteConfig,
 } from "./lib/remoteClient.js";
 import { clearConfig, getConfigPath, loadConfig, saveConfig } from "./lib/config.js";
 import {
@@ -142,7 +141,7 @@ function createServerInstance() {
     },
     {
       instructions:
-        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities. When using Context7 passthrough (context7-cached-docs), ALWAYS include a versioned library id (format: /org/project/version)."
+        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities. When using Context7 passthrough (context7-cached-docs), ALWAYS include a versioned library id (format: /org/project/version).",
     }
   );
 
@@ -871,7 +870,9 @@ async function runCli(argv: string[]) {
         for (const r of results) {
           const sim = r.similarity !== undefined ? ` sim=${(r.similarity * 100).toFixed(1)}%` : "";
           const score = r.score !== undefined ? ` score=${r.score.toFixed(3)}` : "";
-          console.log(`[${r.id}] ${r.title} | type=${r.errorType} | tags=${r.tags.join(", ")}${sim}${score}`);
+          console.log(
+            `[${r.id}] ${r.title} | type=${r.errorType} | tags=${r.tags.join(", ")}${sim}${score}`
+          );
           if (r.preview) {
             console.log(`  preview: ${r.preview}`);
           }
@@ -928,10 +929,18 @@ async function runCli(argv: string[]) {
       const envKey = process.env.CONTEXT8_REMOTE_API_KEY;
       const resolved = resolveRemoteConfig();
       console.log(`Config file: ${getConfigPath()}`);
-      console.log(`Saved URL: ${current.remoteUrl ?? "(not set)"} | Saved key: ${current.apiKey ? maskApiKey(current.apiKey) : "(not set)"}`);
-      console.log(`Env URL: ${envUrl ?? "(not set)"} | Env key: ${envKey ? maskApiKey(envKey) : "(not set)"}`);
-      console.log(`Resolved (flag/env/config): ${describeRemoteSource(resolved?.baseUrl, resolved?.apiKey)}`);
-      console.log("Precedence: flag > env > saved config. Set values with --remote-url/--api-key or clear with --clear.");
+      console.log(
+        `Saved URL: ${current.remoteUrl ?? "(not set)"} | Saved key: ${current.apiKey ? maskApiKey(current.apiKey) : "(not set)"}`
+      );
+      console.log(
+        `Env URL: ${envUrl ?? "(not set)"} | Env key: ${envKey ? maskApiKey(envKey) : "(not set)"}`
+      );
+      console.log(
+        `Resolved (flag/env/config): ${describeRemoteSource(resolved?.baseUrl, resolved?.apiKey)}`
+      );
+      console.log(
+        "Precedence: flag > env > saved config. Set values with --remote-url/--api-key or clear with --clear."
+      );
     });
 
   program
@@ -942,7 +951,12 @@ async function runCli(argv: string[]) {
     .option("--dry-run", "List what would be uploaded without sending")
     .option("--yes", "Skip confirmation prompt")
     .option("--continue-on-error", "Do not abort on first failure")
-    .option("--concurrency <number>", "Max concurrent uploads (default 4)", (v) => parseInt(v, 10), 4)
+    .option(
+      "--concurrency <number>",
+      "Max concurrent uploads (default 4)",
+      (v) => parseInt(v, 10),
+      4
+    )
     .option("--force", "Ignore dedupe map and push duplicates")
     .option("--timeout <ms>", "Per-request timeout in milliseconds", (v) => parseInt(v, 10), 10000)
     .action(async (opts) => {
@@ -983,16 +997,21 @@ async function runCli(argv: string[]) {
           const status = !opts.force && syncMap[item.hash] ? "[skip-duplicate]" : "[push]";
           console.log(`${status} ${item.localId} | ${item.createdAt} | ${item.payload.title}`);
         });
-        console.log(`Would push ${toSend.length} solution(s) to ${remote.baseUrl}${opts.force ? "" : " (skipping known duplicates)"}`);
+        console.log(
+          `Would push ${toSend.length} solution(s) to ${remote.baseUrl}${opts.force ? "" : " (skipping known duplicates)"}`
+        );
         return;
       }
 
       if (!opts.yes) {
-        console.log(`Found ${toSend.length} solution(s). Use --yes to push, or --dry-run to preview. Aborting.`);
+        console.log(
+          `Found ${toSend.length} solution(s). Use --yes to push, or --dry-run to preview. Aborting.`
+        );
         return;
       }
 
-      const concurrency = Number.isFinite(opts.concurrency) && opts.concurrency > 0 ? opts.concurrency : 4;
+      const concurrency =
+        Number.isFinite(opts.concurrency) && opts.concurrency > 0 ? opts.concurrency : 4;
       let success = 0;
       let skipped = 0;
       let failed = 0;
@@ -1015,7 +1034,9 @@ async function runCli(argv: string[]) {
             const remoteResp = await remoteSaveSolution(remote, item.payload);
             updatedMap[item.hash] = remoteResp.id;
             success += 1;
-            console.log(`[${success + skipped + failed}/${toSend.length}] pushed ${item.localId} -> ${remoteResp.id}`);
+            console.log(
+              `[${success + skipped + failed}/${toSend.length}] pushed ${item.localId} -> ${remoteResp.id}`
+            );
           } catch (error) {
             failed += 1;
             console.error(
@@ -1057,7 +1078,9 @@ async function runCli(argv: string[]) {
         migrateDatabase();
         console.log("DB migration check: schema/index ensured.");
       } catch (err) {
-        console.warn(`DB migration step failed: ${err instanceof Error ? err.message : "unknown error"}`);
+        console.warn(
+          `DB migration step failed: ${err instanceof Error ? err.message : "unknown error"}`
+        );
       }
 
       try {
@@ -1110,6 +1133,12 @@ async function callContext7Tool(
   apiKey: string | undefined,
   endpoint = "https://mcp.context7.com/mcp"
 ): Promise<string> {
+  type Context7Content = { type?: string; text?: string };
+  type Context7Response = {
+    result?: { content?: Context7Content[] };
+    error?: { message?: string };
+  };
+
   const resolvedEndpoint = process.env.CONTEXT7_ENDPOINT || endpoint;
 
   const body = {
@@ -1140,14 +1169,19 @@ async function callContext7Tool(
     throw new Error(`Context7 request failed with status ${res.status}`);
   }
 
-  const json = (await res.json()) as any;
+  const json = (await res.json()) as Context7Response;
   if (json.error) {
     throw new Error(json.error?.message || "Context7 returned an error");
   }
 
   const text =
-    json.result?.content?.find((c: any) => c.type === "text")?.text ??
-    json.result?.content?.[0]?.text;
+    json.result?.content?.find(
+      (content): content is Context7Content & { text: string } =>
+        content.type === "text" && typeof content.text === "string"
+    )?.text ??
+    json.result?.content?.find(
+      (content): content is Context7Content & { text: string } => typeof content.text === "string"
+    )?.text;
 
   if (!text) {
     throw new Error("Context7 response did not include text content");

@@ -419,11 +419,11 @@ export async function searchSolutionsSemantic(
     return [];
   }
 
-  let rows: SolutionEmbeddingRow[] = [];
+  let embeddingRows: SolutionEmbeddingRow[] = [];
 
   if (candidateIds && candidateIds.length > 0) {
     const placeholders = candidateIds.map(() => "?").join(",");
-    rows = database
+    embeddingRows = database
       .prepare(
         `
         SELECT id, title, error_type, error_message, context, tags, created_at, embedding
@@ -433,7 +433,7 @@ export async function searchSolutionsSemantic(
       )
       .all(...candidateIds) as SolutionEmbeddingRow[];
   } else {
-    rows = database
+    embeddingRows = database
       .prepare(
         `
         SELECT id, title, error_type, error_message, context, tags, created_at, embedding
@@ -444,13 +444,13 @@ export async function searchSolutionsSemantic(
       .all() as SolutionEmbeddingRow[];
   }
 
-  if (rows.length === 0) {
+  if (embeddingRows.length === 0) {
     return searchSolutionsFTS(query, limit);
   }
 
   const queryEmbedding = await generateEmbedding(query);
 
-  const results = rows
+  const results = embeddingRows
     .map((row) => {
       const solutionEmbedding = deserializeEmbedding(row.embedding as Buffer);
       const similarity = cosineSimilarity(queryEmbedding, solutionEmbedding);

@@ -4,8 +4,13 @@
  */
 
 // Dynamic import for transformers.js
-let pipeline: any = null;
-let embeddingPipeline: any = null;
+type EmbeddingExtractor = (
+  text: string,
+  options: { pooling: "mean"; normalize: boolean }
+) => Promise<{ data: Float32Array }>;
+
+let pipelineFactory: (typeof import("@xenova/transformers"))["pipeline"] | null = null;
+let embeddingPipeline: EmbeddingExtractor | null = null;
 
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
@@ -13,18 +18,22 @@ const EMBEDDING_DIM = 384;
 /**
  * Initialize the embedding pipeline (lazy loading)
  */
-async function initPipeline(): Promise<any> {
+async function initPipeline(): Promise<EmbeddingExtractor> {
   if (embeddingPipeline) return embeddingPipeline;
 
-  if (!pipeline) {
+  if (!pipelineFactory) {
     const transformers = await import("@xenova/transformers");
-    pipeline = transformers.pipeline;
+    pipelineFactory = transformers.pipeline;
   }
 
   console.error("Loading embedding model (first time may take a moment)...");
-  embeddingPipeline = await pipeline("feature-extraction", MODEL_NAME, {
+  const extractor = await pipelineFactory("feature-extraction", MODEL_NAME, {
     quantized: true, // Use quantized model for faster inference
   });
+  if (typeof extractor !== "function") {
+    throw new Error("Transformer pipeline did not return a callable extractor");
+  }
+  embeddingPipeline = extractor as EmbeddingExtractor;
   console.error("Embedding model loaded successfully.");
 
   return embeddingPipeline;
@@ -45,7 +54,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   });
 
   // Convert to regular array
-  return Array.from(output.data as Float32Array);
+  return Array.from(output.data);
 }
 
 /**

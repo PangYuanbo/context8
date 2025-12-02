@@ -19,7 +19,7 @@ Both projects share the same foundational architecture:
 
 ### 1. Core Functionality
 
-| Feature              | Context7                      | Context8        |
+| Feature              | Context7                      | Context8                      |
 | -------------------- | ----------------------------- | ----------------------------- |
 | **Primary Purpose**  | Query online documentation    | Manage local error solutions  |
 | **Data Source**      | External API (context7.com)   | Local SQLite database         |
