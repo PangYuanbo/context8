@@ -38,7 +38,7 @@ Context8 remembers everything for you:
 - ✅ **Local First**: Your data stays on your machine
 - ✅ **AI Integration**: Works seamlessly with AI coding assistants via MCP
 
-## 🛠️ Installation
+## 🛠️ Installation (local stdio; cloud optional)
 
 ### Requirements
 
@@ -47,15 +47,12 @@ Context8 remembers everything for you:
 - npm or compatible package manager (npx, bunx, etc.)
 
 > [!IMPORTANT]
-> **Local-Only Installation**
+> **Stdio MCP only; cloud optional**
 >
-> Context8 MCP currently **only supports local stdio transport**. This means:
 > - ✅ Install via `npx`, `bunx`, or `npm install -g`
-> - ✅ All data stays on your machine in `~/.context8/`
-> - ❌ No HTTP/remote server mode available yet
-> - ❌ Cannot use `serverUrl` or remote configurations
->
-> All installation examples below use the local stdio method.
+> - ✅ Stdio transport (no HTTP server mode)
+> - ✅ Local data in `~/.context8/` by default
+> - ✅ Cloud/remote mode available via `CONTEXT8_REMOTE_URL` + `CONTEXT8_REMOTE_API_KEY`
 
 > [!TIP]
 > **Recommended Post-Setup: Add a Rule to Auto-Use Context8**
@@ -68,6 +65,18 @@ Context8 remembers everything for you:
 > When I encounter an error or bug, automatically search Context8 for similar solutions
 > before suggesting fixes. Use the search-solutions tool to find relevant past solutions.
 > ```
+
+> [!NOTE]
+> **Remote mode env (any client)**
+>
+> Set these to point the MCP to your cloud backend (API key must come from an email-verified account at https://www.context8.org):
+>
+> ```
+> CONTEXT8_REMOTE_URL=https://api.context8.org
+> CONTEXT8_REMOTE_API_KEY=<your-api-key>
+> ```
+>
+> If unset, Context8 runs purely local in `~/.context8/`.
 
 <details>
 <summary><b>Installing via Smithery</b></summary>
@@ -136,6 +145,17 @@ claude mcp add context8 -- npx -y context8-mcp
 ```sh
 claude mcp add context8 --env CONTEXT7_API_KEY=YOUR_API_KEY -- npx -y context8-mcp
 ```
+
+#### With Remote Mode (cloud)
+
+```sh
+claude mcp add context8 \
+  --env CONTEXT8_REMOTE_URL=https://api.context8.org \
+  --env CONTEXT8_REMOTE_API_KEY=<your-api-key> \
+  -- npx -y context8-mcp
+```
+
+API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only.
 
 </details>
 
@@ -1005,6 +1025,7 @@ npx context8-mcp update
 ```
 
 This command:
+
 - Runs database migrations
 - Checks database health
 - Verifies WAL mode
@@ -1027,6 +1048,7 @@ When I share an error message or encounter a bug, automatically:
 ### Tag Your Solutions
 
 Use consistent tags to categorize solutions:
+
 - `typescript`, `react`, `node`
 - `build-error`, `runtime-error`, `type-error`
 - `database`, `api`, `frontend`
@@ -1034,6 +1056,7 @@ Use consistent tags to categorize solutions:
 ### Store Version Info
 
 Always include environment versions when saving solutions:
+
 ```txt
 Node: 20.10.0
 TypeScript: 5.3.3
@@ -1043,6 +1066,7 @@ Framework: Next.js 14.1.0
 ### Use Context7 Integration
 
 For library-specific documentation, combine with Context7:
+
 ```txt
 Get Next.js 15.1.8 routing documentation using context7-cached-docs
 ```
@@ -1171,6 +1195,7 @@ Try using `bunx` instead of `npx`:
 <summary><b>Context7 Integration Not Working</b></summary>
 
 Make sure:
+
 1. `CONTEXT7_API_KEY` environment variable is set
 2. You're using versioned library IDs (e.g., `/vercel/next.js/v15.1.8`)
 3. The Context7 API is accessible from your network

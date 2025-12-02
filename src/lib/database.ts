@@ -27,6 +27,32 @@ export interface DatabaseHealth {
   issues?: string[];
 }
 
+type BaseSolutionRow = {
+  id: string;
+  title: string;
+  error_type: ErrorType;
+  error_message: string;
+  context: string;
+  tags: string;
+  created_at: string;
+};
+
+type SolutionRow = BaseSolutionRow & {
+  root_cause: string;
+  solution: string;
+  code_changes: string | null;
+  project_path: string | null;
+  embedding?: Buffer | null;
+  environment: string | null;
+  labels: string | null;
+  cli_library_id: string | null;
+};
+
+type SolutionStatsRow = { solution_id: string; doc_length: number };
+type SolutionEmbeddingRow = BaseSolutionRow & { embedding: Buffer };
+type SolutionPreviewRow = BaseSolutionRow;
+type TableInfoRow = { name: string };
+
 function openDatabase(): BetterSqlite3Database {
   if (db) return db;
 
@@ -87,7 +113,7 @@ function ensureSchema(database: BetterSqlite3Database): void {
 }
 
 function ensureSolutionColumns(database: BetterSqlite3Database): void {
-  const existing = database.prepare("PRAGMA table_info(solutions);").all() as Array<{ name: string }>;
+  const existing = database.prepare("PRAGMA table_info(solutions);").all() as TableInfoRow[];
   const names = new Set(existing.map((c) => c.name));
 
   const columns: Array<{ name: string; ddl: string }> = [
@@ -181,7 +207,7 @@ function buildPreview(errorMessage?: string, context?: string): string | undefin
   return combined.length ? combined : undefined;
 }
 
-function mapRowToSolution(row: any): ErrorSolution {
+function mapRowToSolution(row: SolutionRow): ErrorSolution {
   return {
     id: row.id,
     title: row.title,
@@ -200,7 +226,10 @@ function mapRowToSolution(row: any): ErrorSolution {
   };
 }
 
-function updateSparseIndexForSolution(database: BetterSqlite3Database, solution: ErrorSolution): void {
+function updateSparseIndexForSolution(
+  database: BetterSqlite3Database,
+  solution: ErrorSolution
+): void {
   const tokens = tokenize(indexableTextFromSolution(solution));
   const docLength = Math.max(tokens.length, 1);
 
@@ -240,7 +269,7 @@ function ensureSparseIndex(database: BetterSqlite3Database): void {
     .prepare(
       `SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id FROM solutions`
     )
-    .all();
+    .all() as SolutionRow[];
 
   for (const row of solutions) {
     updateSparseIndexForSolution(database, mapRowToSolution(row));
@@ -258,12 +287,12 @@ function searchSolutionsSparseInternal(
   if (terms.length === 0) return [];
 
   const docLengths = new Map<string, number>();
-  database
+  const statsRows = database
     .prepare("SELECT solution_id, doc_length FROM solution_stats")
-    .all()
-    .forEach((row: any) => {
-      docLengths.set(row.solution_id, row.doc_length || 1);
-    });
+    .all() as SolutionStatsRow[];
+  statsRows.forEach((row) => {
+    docLengths.set(row.solution_id, row.doc_length || 1);
+  });
 
   const totalDocs = docLengths.size || 1;
   const avgDocLength =
@@ -386,20 +415,11 @@ export async function searchSolutionsSemantic(
 ): Promise<SolutionSearchResult[]> {
   const database = openDatabase();
 
-  let rows: Array<{
-    id: string;
-    title: string;
-    error_type: string;
-    error_message: string;
-    context: string;
-    tags: string;
-    created_at: string;
-    embedding: Buffer | null;
-  }> = [];
-
   if (candidateIds && candidateIds.length === 0) {
     return [];
   }
+
+  let rows: SolutionEmbeddingRow[] = [];
 
   if (candidateIds && candidateIds.length > 0) {
     const placeholders = candidateIds.map(() => "?").join(",");
@@ -411,7 +431,7 @@ export async function searchSolutionsSemantic(
         WHERE embedding IS NOT NULL AND id IN (${placeholders})
       `
       )
-      .all(...candidateIds) as any;
+      .all(...candidateIds) as SolutionEmbeddingRow[];
   } else {
     rows = database
       .prepare(
@@ -421,7 +441,7 @@ export async function searchSolutionsSemantic(
         WHERE embedding IS NOT NULL
       `
       )
-      .all() as any;
+      .all() as SolutionEmbeddingRow[];
   }
 
   if (rows.length === 0) {
@@ -445,7 +465,7 @@ export async function searchSolutionsSemantic(
         id: row.id,
         title: row.title,
         errorType: row.error_type,
-        tags: JSON.parse(row.tags) as string[],
+        tags: JSON.parse(row.tags),
         createdAt: row.created_at,
         similarity,
         preview,
@@ -482,7 +502,7 @@ export async function searchSolutionsFTS(
         LIMIT ?
       `
       )
-      .all(limit) as any[];
+      .all(limit) as SolutionPreviewRow[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -522,7 +542,7 @@ export async function searchSolutionsFTS(
       LIMIT ?
     `
     )
-    .all(...params) as any[];
+    .all(...params) as SolutionPreviewRow[];
 
   return rows.map((row) => ({
     id: row.id,
@@ -649,15 +669,15 @@ export async function searchSolutionsByVector(
     `
     )
     .all() as Array<{
-      id: string;
-      title: string;
-      error_type: string;
-      error_message: string;
-      context: string;
-      tags: string;
-      created_at: string;
-      embedding: Buffer;
-    }>;
+    id: string;
+    title: string;
+    error_type: string;
+    error_message: string;
+    context: string;
+    tags: string;
+    created_at: string;
+    embedding: Buffer;
+  }>;
 
   return rows
     .map((row) => {
@@ -715,7 +735,7 @@ export async function getSolutionById(id: string): Promise<ErrorSolution | null>
     FROM solutions WHERE id = ?
   `
     )
-    .get(id);
+    .get(id) as SolutionRow | undefined;
 
   if (!row) return null;
 
@@ -738,7 +758,7 @@ export async function getSolutionsByIds(ids: string[]): Promise<ErrorSolution[]>
       FROM solutions WHERE id IN (${placeholders})
     `
     )
-    .all(...ids);
+    .all(...ids) as SolutionRow[];
 
   return rows.map(mapRowToSolution);
 }
@@ -748,7 +768,9 @@ export async function getSolutionsByIds(ids: string[]): Promise<ErrorSolution[]>
  */
 export async function getSolutionCount(): Promise<number> {
   const database = openDatabase();
-  const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as { count: number };
+  const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as {
+    count: number;
+  };
   return row?.count || 0;
 }
 
@@ -817,7 +839,7 @@ export async function listSolutions(
       LIMIT ? OFFSET ?
     `
     )
-    .all(limit, offset);
+    .all(limit, offset) as SolutionRow[];
 
   return rows.map(mapRowToSolution);
 }
@@ -835,7 +857,7 @@ export async function getAllSolutions(): Promise<ErrorSolution[]> {
       ORDER BY created_at ASC
     `
     )
-    .all();
+    .all() as SolutionRow[];
 
   return rows.map(mapRowToSolution);
 }
@@ -846,8 +868,8 @@ export async function getAllSolutions(): Promise<ErrorSolution[]> {
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
   try {
     const database = openDatabase();
-    const tableInfo = database.prepare("PRAGMA table_info(solutions);").all();
-    const columns = tableInfo.map((row: any) => row.name as string);
+    const tableInfo = database.prepare("PRAGMA table_info(solutions);").all() as TableInfoRow[];
+    const columns = tableInfo.map((row) => row.name);
     const requiredColumns = [
       "id",
       "title",
@@ -867,7 +889,9 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
       if (!columns.includes(col)) issues.push(`missing column: ${col}`);
     }
 
-    const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as { count: number };
+    const row = database.prepare("SELECT COUNT(*) as count FROM solutions").get() as {
+      count: number;
+    };
 
     return {
       ok: issues.length === 0,
