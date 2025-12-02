@@ -16,6 +16,7 @@ import {
   getSolutionCount,
   getDatabasePath,
   listSolutions,
+  getAllSolutions,
   deleteSolution,
   checkDatabaseHealth,
   migrateDatabase,
@@ -34,6 +35,15 @@ import {
   remoteDeleteSolution,
   RemoteConfig,
 } from "./lib/remoteClient.js";
+import { clearConfig, getConfigPath, loadConfig, saveConfig } from "./lib/config.js";
+import {
+  describeRemoteSource,
+  hashSolution,
+  loadSyncMap,
+  maskApiKey,
+  resolveRemoteConfig,
+  saveSyncMap,
+} from "./lib/sync.js";
 
 const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 
@@ -123,15 +133,7 @@ function versionIssues(env: Record<string, unknown> | undefined): { warnings: st
 
 // Function to create a new server instance with all Context8 tools registered
 function createServerInstance() {
-  const remoteConfig: RemoteConfig | null =
-    process.env.CONTEXT8_REMOTE_URL && process.env.CONTEXT8_REMOTE_API_KEY
-      ? {
-          baseUrl: process.env.CONTEXT8_REMOTE_URL,
-          apiKey: process.env.CONTEXT8_REMOTE_API_KEY,
-        }
-      : process.env.CONTEXT8_REMOTE_URL
-        ? { baseUrl: process.env.CONTEXT8_REMOTE_URL }
-        : null;
+  const remoteConfig = resolveRemoteConfig();
 
   const server = new McpServer(
     {
@@ -851,6 +853,36 @@ async function runCli(argv: string[]) {
     });
 
   program
+    .command("search")
+    .description("Search solutions (local or remote if configured)")
+    .argument("<query>", "Search query (non-empty)")
+    .option("-l, --limit <number>", "Number of items", (v) => parseInt(v, 10), 5)
+    .option("--mode <mode>", "semantic | hybrid | sparse", "hybrid")
+    .action(async (query, opts) => {
+      try {
+        const resolvedRemote = resolveRemoteConfig();
+        const results = resolvedRemote
+          ? await remoteSearchSolutions(resolvedRemote, query, opts.limit, { mode: opts.mode })
+          : await searchSolutions(query, opts.limit, { mode: opts.mode });
+        if (results.length === 0) {
+          console.log("No results.");
+          return;
+        }
+        for (const r of results) {
+          const sim = r.similarity !== undefined ? ` sim=${(r.similarity * 100).toFixed(1)}%` : "";
+          const score = r.score !== undefined ? ` score=${r.score.toFixed(3)}` : "";
+          console.log(`[${r.id}] ${r.title} | type=${r.errorType} | tags=${r.tags.join(", ")}${sim}${score}`);
+          if (r.preview) {
+            console.log(`  preview: ${r.preview}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
     .command("delete")
     .description("Delete a solution by ID")
     .argument("<id>", "Solution ID")
@@ -860,6 +892,158 @@ async function runCli(argv: string[]) {
         console.log(`Deleted solution ${id}`);
       } else {
         console.error(`Solution not found: ${id}`);
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("remote-config")
+    .description("Set or view remote Context8 server configuration (URL/API key)")
+    .option("--remote-url <url>", "Remote Context8 server base URL to save")
+    .option("--api-key <key>", "API key for the remote server")
+    .option("--show", "Show saved configuration")
+    .option("--clear", "Clear saved remote configuration file")
+    .action((opts) => {
+      if (opts.clear) {
+        clearConfig();
+        console.log(`Cleared saved remote configuration at ${getConfigPath()}`);
+        return;
+      }
+
+      if (opts.remoteUrl || opts.apiKey) {
+        const update: Partial<{ remoteUrl: string; apiKey: string }> = {};
+        if (typeof opts.remoteUrl === "string") update.remoteUrl = opts.remoteUrl;
+        if (typeof opts.apiKey === "string") update.apiKey = opts.apiKey;
+
+        const updated = saveConfig(update);
+        console.log(`Saved remote configuration to ${getConfigPath()}`);
+        console.log(`Remote URL: ${updated.remoteUrl ?? "(not set)"}`);
+        console.log(`API key: ${updated.apiKey ? maskApiKey(updated.apiKey) : "(not set)"}`);
+        console.log("Note: Environment variables override the saved config if set.");
+        return;
+      }
+
+      const current = loadConfig();
+      const envUrl = process.env.CONTEXT8_REMOTE_URL;
+      const envKey = process.env.CONTEXT8_REMOTE_API_KEY;
+      const resolved = resolveRemoteConfig();
+      console.log(`Config file: ${getConfigPath()}`);
+      console.log(`Saved URL: ${current.remoteUrl ?? "(not set)"} | Saved key: ${current.apiKey ? maskApiKey(current.apiKey) : "(not set)"}`);
+      console.log(`Env URL: ${envUrl ?? "(not set)"} | Env key: ${envKey ? maskApiKey(envKey) : "(not set)"}`);
+      console.log(`Resolved (flag/env/config): ${describeRemoteSource(resolved?.baseUrl, resolved?.apiKey)}`);
+      console.log("Precedence: flag > env > saved config. Set values with --remote-url/--api-key or clear with --clear.");
+    });
+
+  program
+    .command("push-remote")
+    .description("Upload all local solutions to a remote Context8 server")
+    .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
+    .option("--api-key <key>", "API key for remote server (overrides env/config)")
+    .option("--dry-run", "List what would be uploaded without sending")
+    .option("--yes", "Skip confirmation prompt")
+    .option("--continue-on-error", "Do not abort on first failure")
+    .option("--concurrency <number>", "Max concurrent uploads (default 4)", (v) => parseInt(v, 10), 4)
+    .option("--force", "Ignore dedupe map and push duplicates")
+    .option("--timeout <ms>", "Per-request timeout in milliseconds", (v) => parseInt(v, 10), 10000)
+    .action(async (opts) => {
+      const remote = resolveRemoteConfig(opts.remoteUrl, opts.apiKey);
+      if (!remote) {
+        console.error(
+          "Remote URL is required. Set via --remote-url, CONTEXT8_REMOTE_URL, or `context8-mcp remote-config`."
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const timeoutMs = Number.isFinite(opts.timeout) && opts.timeout > 0 ? opts.timeout : 10000;
+      process.env.CONTEXT8_REQUEST_TIMEOUT = String(timeoutMs);
+
+      const items = await getAllSolutions();
+      if (items.length === 0) {
+        console.log("No local solutions found to push.");
+        return;
+      }
+
+      console.log(describeRemoteSource(remote.baseUrl, remote.apiKey));
+
+      const syncMap = loadSyncMap();
+      const toSend = items.map((item) => {
+        const { id: _id, createdAt: _createdAt, ...payload } = item;
+        const hash = hashSolution({
+          title: payload.title,
+          errorMessage: payload.errorMessage,
+          rootCause: payload.rootCause,
+          solution: payload.solution,
+          tags: payload.tags,
+        });
+        return { payload, hash, localId: item.id, createdAt: item.createdAt };
+      });
+
+      if (opts.dryRun) {
+        toSend.forEach((item) => {
+          const status = !opts.force && syncMap[item.hash] ? "[skip-duplicate]" : "[push]";
+          console.log(`${status} ${item.localId} | ${item.createdAt} | ${item.payload.title}`);
+        });
+        console.log(`Would push ${toSend.length} solution(s) to ${remote.baseUrl}${opts.force ? "" : " (skipping known duplicates)"}`);
+        return;
+      }
+
+      if (!opts.yes) {
+        console.log(`Found ${toSend.length} solution(s). Use --yes to push, or --dry-run to preview. Aborting.`);
+        return;
+      }
+
+      const concurrency = Number.isFinite(opts.concurrency) && opts.concurrency > 0 ? opts.concurrency : 4;
+      let success = 0;
+      let skipped = 0;
+      let failed = 0;
+      let index = 0;
+      const updatedMap: Record<string, string> = { ...syncMap };
+      let abort = false;
+
+      const worker = async () => {
+        while (true) {
+          if (abort) return;
+          const current = index;
+          if (current >= toSend.length) return;
+          index += 1;
+          const item = toSend[current];
+          if (!opts.force && updatedMap[item.hash]) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            const remoteResp = await remoteSaveSolution(remote, item.payload);
+            updatedMap[item.hash] = remoteResp.id;
+            success += 1;
+            console.log(`[${success + skipped + failed}/${toSend.length}] pushed ${item.localId} -> ${remoteResp.id}`);
+          } catch (error) {
+            failed += 1;
+            console.error(
+              `[${success + skipped + failed}/${toSend.length}] failed ${item.localId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
+            if (!opts.continueOnError) {
+              abort = true;
+              return;
+            }
+          }
+        }
+      };
+
+      const workers = Array.from({ length: concurrency }, () => worker());
+      await Promise.all(workers);
+
+      if (success > 0) {
+        saveSyncMap(updatedMap);
+      }
+
+      console.log(
+        `Done. pushed=${success}, skipped=${skipped}, failed=${failed}, target=${remote.baseUrl}${
+          remote.apiKey ? " (API key provided)" : ""
+        }.`
+      );
+      if (failed > 0) {
         process.exitCode = 1;
       }
     });
