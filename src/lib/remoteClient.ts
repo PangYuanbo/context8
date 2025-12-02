@@ -125,19 +125,63 @@ export async function remoteSearchSolutions(
   return data.results;
 }
 
-export async function remoteGetSolutionCount(config: RemoteConfig): Promise<number> {
-  // crude count via search empty query
+async function legacyCountViaSearch(config: RemoteConfig): Promise<number> {
+  // Approximate count via keyword search; may be off but avoids throwing.
   const res = await withTimeout(
     fetch(`${config.baseUrl}/search`, {
       method: "POST",
       headers: headers(config.apiKey),
-      // use non-empty placeholder to satisfy backend validation
-      body: JSON.stringify({ query: "*", limit: 1, offset: 0 }),
+      body: JSON.stringify({ query: " ", limit: 0, offset: 0 }),
     })
   );
-  if (!res.ok) throw new Error(`Remote count failed: ${await parseError(res)}`);
-  const data = (await res.json()) as { total: number };
-  return data.total ?? 0;
+  if (!res.ok) throw new Error(await parseError(res));
+  const data = (await res.json()) as { total?: number };
+  return typeof data.total === "number" ? data.total : 0;
+}
+
+export async function remoteGetSolutionCount(config: RemoteConfig): Promise<number> {
+  const fallback = async () => {
+    try {
+      return await legacyCountViaSearch(config);
+    } catch (error) {
+      console.warn(
+        `Remote count fallback failed; returning 0: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return 0;
+    }
+  };
+
+  try {
+    const res = await withTimeout(
+      fetch(`${config.baseUrl}/solutions/count`, {
+        headers: headers(config.apiKey),
+      })
+    );
+
+    if (res.ok) {
+      const data = (await res.json()) as { total?: number };
+      if (typeof data.total === "number") return data.total;
+      throw new Error("Invalid count payload");
+    }
+
+    if (res.status === 404 || res.status === 405) {
+      console.warn(
+        "Remote count endpoint missing; using search-based approximation (may be inaccurate)."
+      );
+      return await fallback();
+    }
+
+    throw new Error(`Remote count failed: ${await parseError(res)}`);
+  } catch (error) {
+    console.warn(
+      `Remote count request failed; using search-based approximation: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return await fallback();
+  }
 }
 
 export async function remoteDeleteSolution(config: RemoteConfig, id: string): Promise<boolean> {

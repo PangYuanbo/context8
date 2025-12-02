@@ -2,6 +2,32 @@
 
 All notable changes to the Context8 MCP Server will be documented in this file.
 
+## [1.0.3-beta.3] - 2025-11-30
+
+### Changed
+
+- Remote client requests now include timeouts and return parsed error bodies for clearer failures.
+- Sync/dedupe helpers extracted from `src/index.ts` into `src/lib/sync.ts` to simplify the entry point.
+
+### Fixed
+
+- Remote solution counts now use a dedicated `/solutions/count` endpoint (with a fallback for legacy servers) instead of the broken `"*"` search hack.
+
+## [1.0.3-beta.2] - 2025-11-30
+
+### Added
+
+- CLI `remote-config` to persist remote URL/API key in `~/.context8/config.json` (flags > env > saved file)
+- CLI `push-remote` to upload all local solutions to a remote Context8 server with dry-run/force/concurrency options and dedupe map in `~/.context8/remote-sync.json`
+
+### Changed
+
+- Architecture docs now reflect the sparse inverted index + hybrid search (no FTS5 virtual table)
+
+### Fixed
+
+- Removed duplicated remote sync helpers in `src/index.ts` so TypeScript build passes again
+
 ## [1.0.0] - 2025-01-19
 
 ### Added

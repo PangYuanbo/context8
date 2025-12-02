@@ -30,9 +30,9 @@ Context8 is a Model Context Protocol (MCP) server that provides a local, privacy
 ┌───────▼──────────┐    ┌────────▼─────────┐
 │  database.ts     │    │  embeddings.ts   │
 │                  │    │                  │
-│ - SQLite Ops    │    │ - Vector Gen     │
-│ - FTS5 Search   │    │ - Similarity     │
-│ - CRUD          │    │ - Transformers   │
+│ - SQLite Ops     │    │ - Vector Gen     │
+│ - Sparse Search  │    │ - Similarity     │
+│ - CRUD           │    │ - Transformers   │
 └───────┬──────────┘    └──────────────────┘
         │
 ┌───────▼──────────────────────────┐
@@ -81,16 +81,17 @@ Context8 is a Model Context Protocol (MCP) server that provides a local, privacy
 - Database initialization and schema management
 - CRUD operations for error solutions
 - Semantic search using vector embeddings
-- Full-text search fallback using FTS5
+- Sparse keyword search (BM25-style) with inverted index
+- LIKE fallback when embeddings are unavailable
 - Database migration and maintenance
 
 **Key Functions**:
 
 - `initDatabase()`: Creates database and tables
-- `saveSolution()`: Inserts new solution with embedding
-- `searchSolutions()`: Semantic + FTS5 hybrid search
+- `saveSolution()`: Inserts new solution with embedding and updates sparse index
+- `searchSolutions()`: Hybrid dense/sparse search with keyword fallback
 - `searchSolutionsSemantic()`: Vector-based similarity search
-- `searchSolutionsFTS()`: Full-text search fallback
+- `searchSolutionsByVector()`: Direct cosine similarity search
 - `getSolutionById()`: Retrieve single solution
 - `getSolutionsByIds()`: Batch retrieve solutions
 
@@ -109,13 +110,22 @@ CREATE TABLE solutions (
   tags TEXT NOT NULL,
   created_at TEXT NOT NULL,
   project_path TEXT,
-  embedding BLOB
+  embedding BLOB,
+  environment TEXT,
+  labels TEXT,
+  cli_library_id TEXT
 );
 
-CREATE VIRTUAL TABLE solutions_fts USING fts5(
-  id, title, error_message, error_type,
-  context, root_cause, solution, tags,
-  content=solutions
+CREATE TABLE inverted_index (
+  term TEXT NOT NULL,
+  solution_id TEXT NOT NULL,
+  term_freq INTEGER NOT NULL,
+  PRIMARY KEY (term, solution_id)
+);
+
+CREATE TABLE solution_stats (
+  solution_id TEXT PRIMARY KEY,
+  doc_length INTEGER NOT NULL
 );
 ```
 
@@ -156,6 +166,15 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 - `SolutionSearchResult`: Search result preview
 - `ErrorType`: Enum of error categories
 
+### 5. Remote Sync Helpers (`src/lib/remoteClient.ts`, `src/lib/config.ts`)
+
+**Purpose**: Optional push-to-remote support
+
+- Resolve remote base URL/API key from flags → env → `~/.context8/config.json`
+- Persist remote target locally via `remote-config` CLI
+- Deduplicate uploads in `push-remote` using content hash map stored at `~/.context8/remote-sync.json`
+- Remote calls use simple JSON HTTP endpoints (`/solutions`, `/search`, `/solutions/{id}`, `/solutions/count` for accurate totals; legacy servers fall back to a best-effort search count)
+
 ## Data Flow
 
 ### Saving a Solution
@@ -167,7 +186,7 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 4. Embeddings → Model: all-MiniLM-L6-v2 inference
 5. Model → Embeddings: [384-dim vector]
 6. Embeddings → Database: saveSolution(solution + embedding)
-7. Database → SQLite: INSERT into solutions + FTS5 index
+7. Database: INSERT into solutions + update inverted_index + solution_stats
 8. SQLite → Database: Success
 9. Database → MCP Server: savedSolution
 10. MCP Server → Claude: Success message
@@ -180,16 +199,13 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 1. User → Claude: "Search for 'react hook error'"
 2. Claude → MCP Server: search-solutions("react hook error")
 3. MCP Server → Embeddings: generateEmbedding("react hook error")
-4. Embeddings → Model: all-MiniLM-L6-v2 inference
-5. Model → Embeddings: [384-dim query vector]
-6. Embeddings → Database: searchSolutionsSemantic(queryVector)
-7. Database → SQLite: SELECT embedding FROM solutions
-8. SQLite → Database: All solution embeddings
-9. Database: Calculate cosine similarity for each
-10. Database: Sort by similarity, return top 25
-11. Database → MCP Server: [SolutionSearchResult[]]
-12. MCP Server → Claude: Formatted results with similarity %
-13. Claude → User: "Found 5 solutions: ..."
+4. Embeddings → Model: all-MiniLM-L6-v2 inference → [384-dim query vector]
+5. Database: Sparse phase builds BM25-style candidates from inverted_index/solution_stats
+6. Database: Dense phase scores candidates with cosine similarity
+7. Database: Hybrid rank combines dense + sparse weights (fallback to LIKE if needed)
+8. Database → MCP Server: [SolutionSearchResult[]]
+9. MCP Server → Claude: Formatted results with similarity %
+10. Claude → User: "Found 5 solutions: ..."
 ```
 
 ## Design Decisions
@@ -199,9 +215,9 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 - ✅ Lightweight and embedded (no server required)
 - ✅ Zero configuration
 - ✅ ACID compliance
-- ✅ Full-text search (FTS5)
 - ✅ Binary blob support for embeddings
 - ✅ Cross-platform
+- ✅ Simple to extend with custom inverted index tables
 
 ### Why Local Embeddings?
 
@@ -225,11 +241,11 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 - Handles paraphrasing and synonyms
 - Works across languages (to some extent)
 
-**FTS5 Full-Text Search** (Fallback):
+**Sparse Keyword Search** (Fallback/Blend):
 
-- Faster for exact keyword matches
-- No model loading required
-- Better for specific error messages
+- BM25-style scoring over inverted_index/solution_stats
+- Fast exact/near-exact matching for error strings
+- Avoids model load for cold-start; still works when embeddings missing
 
 ### Why Stdio Transport?
 
@@ -243,9 +259,9 @@ CREATE VIRTUAL TABLE solutions_fts USING fts5(
 ### Data Privacy
 
 1. **Local Storage Only**: All data in `~/.context8/solutions.db`
-2. **No Network Calls**: Zero external API usage
+2. **Offline by Default**: No external calls unless a remote URL is configured explicitly
 3. **No Telemetry**: No tracking or analytics
-4. **User Control**: User owns and controls their data
+4. **User Control**: User owns and controls their data (including whether to push remotely)
 
 ### Privacy Guidelines in Prompts
 
@@ -271,7 +287,7 @@ The `save-error-solution` tool includes extensive privacy guidelines:
 | --------------- | ---------- | -------------------------------- |
 | Save Solution   | O(n)       | n = embedding dimension (384)    |
 | Semantic Search | O(n\*m)    | n = solutions, m = embedding dim |
-| FTS5 Search     | O(log n)   | Inverted index                   |
+| Sparse keyword  | O(k)       | Inverted index postings (BM25)   |
 | Get by ID       | O(1)       | Primary key lookup               |
 
 ### Space Complexity
@@ -288,7 +304,7 @@ The `save-error-solution` tool includes extensive privacy guidelines:
 1. **Lazy Loading**: Model loads only when needed
 2. **Connection Pooling**: Single DB connection reused
 3. **Batch Operations**: `getSolutionsByIds` is more efficient
-4. **FTS5 Indexing**: Automatic indexing via triggers
+4. **Sparse Index Rebuild**: `ensureSparseIndex` backfills inverted_index/solution_stats when empty
 5. **WAL Mode**: Write-ahead logging for concurrency
 
 ## Scalability
@@ -326,7 +342,7 @@ SQLite Error → Database Layer → MCP Tool → Claude → User
 
 - User-friendly messages (no stack traces to user)
 - Technical details logged to stderr
-- Graceful degradation (FTS5 fallback)
+- Graceful degradation (LIKE keyword fallback)
 
 ## Testing Strategy
 
@@ -367,7 +383,6 @@ SQLite Error → Database Layer → MCP Tool → Claude → User
 ## References
 
 - [Model Context Protocol Specification](https://modelcontextprotocol.io)
-- [SQLite FTS5 Documentation](https://www.sqlite.org/fts5.html)
 - [Transformers.js Documentation](https://huggingface.co/docs/transformers.js)
 - [all-MiniLM-L6-v2 Model Card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 

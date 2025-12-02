@@ -823,6 +823,24 @@ export async function listSolutions(
 }
 
 /**
+ * Export all solutions (oldest first) for syncing purposes.
+ */
+export async function getAllSolutions(): Promise<ErrorSolution[]> {
+  const database = openDatabase();
+  const rows = database
+    .prepare(
+      `
+      SELECT id, title, error_message, error_type, context, root_cause, solution, code_changes, tags, created_at, project_path, environment, labels, cli_library_id
+      FROM solutions
+      ORDER BY created_at ASC
+    `
+    )
+    .all();
+
+  return rows.map(mapRowToSolution);
+}
+
+/**
  * Health check: schema columns and row count
  */
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {

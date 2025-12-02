@@ -1076,6 +1076,9 @@ Context8 MCP runs as a stdio MCP server when invoked without arguments. The foll
 - `context8-mcp list` – List recent solutions (see CLI Usage section above)
 - `context8-mcp delete <id>` – Delete a solution by ID
 - `context8-mcp update` – Run database migrations and check for package updates
+- `context8-mcp remote-config` – Save or view remote URL/API key for cloud sync and remote mode
+- `context8-mcp push-remote` – Upload all local solutions to a remote Context8 server (uses saved/env remote config)
+- `context8-mcp search "<query>" [--limit N --mode hybrid|semantic|sparse]` – Search locally or remotely (if configured)
 
 ### Environment Variables
 
@@ -1084,6 +1087,29 @@ Context8 MCP runs as a stdio MCP server when invoked without arguments. The foll
 - `CONTEXT8_DEFAULT_LIMIT` – Default search result limit (optional, defaults to 25)
 - `CONTEXT8_REMOTE_URL` – Remote Context8 server URL (optional, for remote mode)
 - `CONTEXT8_REMOTE_API_KEY` – API key for remote server (optional, for remote mode)
+
+You can also persist the remote URL/API key in `~/.context8/config.json` using `context8-mcp remote-config`. Environment variables override the saved config when both are set.
+
+### Remote sync (optional)
+
+- Get an API key at https://www.context8.org (API key must belong to an email-verified user).
+- Save remote target locally: `context8-mcp remote-config --remote-url https://your-context8 --api-key <key>` (writes to `~/.context8/config.json`; flags > env > saved file).
+- Push all local solutions: `context8-mcp push-remote --yes` (use `--dry-run` to preview; deduped via `~/.context8/remote-sync.json` unless `--force`).
+- Remote sync is opt-in; local mode remains the default when no remote URL is resolved.
+- Network guardrails: per-request timeout defaults to 10s; override with `--timeout <ms>` (e.g., `--timeout 15000`).
+- Accurate total counts require backend support for `GET /solutions/count`; older servers will fall back to an approximate search-based count.
+- API keys must be created via the `/apikeys` route and belong to an email-verified user; use `X-API-Key: <plaintext>` in requests (search `query` must be non-empty or backend returns 422).
+- Example MCP env block (TOML style):
+  ```toml
+  [mcp_servers.context8.env]
+  CONTEXT8_REMOTE_URL = "https://api.context8.org"
+  CONTEXT8_REMOTE_API_KEY = "<your-api-key>"
+  ```
+
+### Context7 cache (local-only)
+
+- `context7-cached-docs` is registered only in local mode; when a remote URL is configured, the tool is not available and no cache writes occur.
+- Always supply a versioned library id (e.g., `/vercel/next.js/v15.1.8`). If you need Context7 docs while in remote mode, disable remote or run a local instance.
 
 ## 🚨 Troubleshooting
 
@@ -1114,6 +1140,21 @@ Try using `bunx` instead of `npx`:
 }
 ```
 
+</details>
+
+<details>
+<summary><b>Auth/401 or 422 on search</b></summary>
+
+- Ensure you are using an API key created via `/apikeys` for an email-verified user.
+- For search, `query` must be non-empty (min length 1) or backend returns 422.
+- If using a remote URL, check that `CONTEXT8_REMOTE_URL` and `CONTEXT8_REMOTE_API_KEY` are set, and no trailing slash is present.
+</details>
+
+<details>
+<summary><b>Deployment security</b></summary>
+
+- Set strong `JWT_SECRET` (and related secrets) in your deployment; defaults like `"change_me"` are insecure and for dev only.
+- Ensure only verified users/API keys can access `/solutions` and `/search`.
 </details>
 
 <details>

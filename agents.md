@@ -203,3 +203,4 @@ tailwindcss + shadcn
 17. Context8 检索实现为自建稀疏倒排索引（inverted_index + solution_stats）与稠密向量混排，无 SQLite FTS 虚表；空索引由 ensureSparseIndex 回填。
 18. 配置远端时依然保留本地 `context7-cached-docs` 工具，写代码前可照常先查 Context7 文档，不因远端模式缺失。
 19. 仓库内禁止硬编码任何真实凭证（数据库 URL、密码、API Key 等），测试脚本一律用环境变量或占位符，避免泄露。
+20. 远端计数统一走 `GET /solutions/count`（按 user_id 过滤）；旧版本缺少端点时客户端仅用 limit=0 的搜索做近似统计，不再使用 `"*"` 查询。
