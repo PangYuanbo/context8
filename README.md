@@ -67,6 +67,21 @@ Context8 remembers everything for you:
 > ```
 
 > [!NOTE]
+> **Remote mode (applies to any client below)**
+>
+> Add these env vars to your MCP client config to use the cloud backend (API key from an email-verified account at https://www.context8.org):
+> ```json
+> {
+>   "env": {
+>     "CONTEXT8_REMOTE_URL": "https://api.context8.org",
+>     "CONTEXT8_REMOTE_API_KEY": "<your-api-key>",
+>     "CONTEXT7_API_KEY": "OPTIONAL_FOR_CONTEXT7"
+>   }
+> }
+> ```
+> If unset, Context8 runs locally in `~/.context8/`.
+
+> [!NOTE]
 > **Remote mode env (any client)**
 >
 > Set these to point the MCP to your cloud backend (API key must come from an email-verified account at https://www.context8.org):
