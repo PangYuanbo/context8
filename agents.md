@@ -204,3 +204,5 @@ tailwindcss + shadcn
 18. 配置远端时依然保留本地 `context7-cached-docs` 工具，写代码前可照常先查 Context7 文档，不因远端模式缺失。
 19. 仓库内禁止硬编码任何真实凭证（数据库 URL、密码、API Key 等），测试脚本一律用环境变量或占位符，避免泄露。
 20. 远端计数统一走 `GET /solutions/count`（按 user_id 过滤）；旧版本缺少端点时客户端仅用 limit=0 的搜索做近似统计，不再使用 `"*"` 查询。
+21. SQLite 查询结果映射统一走强类型行结构（SolutionRow/SolutionEmbeddingRow/SolutionStatsRow/SolutionPreviewRow），避免 any，mapRowToSolution 作为唯一出口。
+22. Context7 工具调用需要对响应做类型守卫，只在存在 text 内容时返回，防止空响应路径抛错。
