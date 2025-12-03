@@ -127,6 +127,23 @@ If you want to use Context7's cached documentation feature:
     }
   }
 }
+
+#### With Remote Mode (cloud)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "npx",
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_URL": "https://api.context8.org",
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only.
 ```
 
 </details>
