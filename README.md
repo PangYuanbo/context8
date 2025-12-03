@@ -1105,6 +1105,8 @@ Context8 MCP runs as a stdio MCP server when invoked without arguments. The foll
 - `context8-mcp push-remote` – Upload all local solutions to a remote Context8 server (uses saved/env remote config)
 - `context8-mcp search "<query>" [--limit N --mode hybrid|semantic|sparse]` – Search locally or remotely (if configured)
 
+MCP clients can also call the `diagnose-mode` tool to report whether the server is running in remote or local mode and see reachability/count.
+
 ### Environment Variables
 
 - `CONTEXT7_API_KEY` – Context7 API key for the `context7-cached-docs` tool

@@ -731,6 +731,66 @@ The deletion also removes the sparse index and stats so the DB stays consistent.
     }
   );
 
+  // Register diagnostic tool to report current mode (remote/local) and connectivity
+  server.registerTool(
+    "diagnose-mode",
+    {
+      title: "Diagnose Mode",
+      description:
+        "Reports whether the server is using remote or local storage and checks connectivity/count.",
+      inputSchema: {},
+    },
+    async () => {
+      if (remoteConfig) {
+        try {
+          const total = await remoteGetSolutionCount(remoteConfig);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Mode: remote (reachable)\nBase URL: ${remoteConfig.baseUrl}\nSolutions: ${total}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Mode: remote (unreachable)\nBase URL: ${remoteConfig.baseUrl}\nError: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              },
+            ],
+          };
+        }
+      }
+
+      try {
+        const total = await getSolutionCount();
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Mode: local\nDatabase: ${getDatabasePath()}\nSolutions: ${total}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Mode: local (error reading DB)\nDatabase: ${getDatabasePath()}\nError: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   // Register Context7 cached docs fetcher
   server.registerTool(
     "context7-cached-docs",
