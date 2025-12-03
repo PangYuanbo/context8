@@ -944,6 +944,42 @@ async function runCli(argv: string[]) {
     });
 
   program
+    .command("diagnose")
+    .description("Check whether Context8 is running in remote or local mode and validate connectivity")
+    .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
+    .option("--api-key <key>", "API key for remote server (overrides env/config)")
+    .action(async (opts) => {
+      const remote = resolveRemoteConfig(opts.remoteUrl, opts.apiKey);
+      if (remote) {
+        console.log(describeRemoteSource(remote.baseUrl, remote.apiKey));
+        try {
+          const total = await remoteGetSolutionCount(remote);
+          console.log(`Mode: remote (reachable) | Solutions: ${total}`);
+        } catch (error) {
+          console.error(
+            `Mode: remote (unreachable) | Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      try {
+        const total = await getSolutionCount();
+        console.log(`Mode: local | DB: ${getDatabasePath()} | Solutions: ${total}`);
+      } catch (error) {
+        console.error(
+          `Mode: local (error reading DB) | Error: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  program
     .command("push-remote")
     .description("Upload all local solutions to a remote Context8 server")
     .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
