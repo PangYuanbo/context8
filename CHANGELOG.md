@@ -2,6 +2,16 @@
 
 All notable changes to the Context8 MCP Server will be documented in this file.
 
+## [1.0.3-beta.5] - 2025-12-03
+
+### Added
+
+- CLI `diagnose` command to report resolved mode (remote/local) and test connectivity/count via `/solutions/count`.
+
+### Fixed
+
+- `save-error-solution` response now reports actual target (`Remote: <url>` vs `Local DB: <path>`) instead of always showing the local path when remote mode is active.
+
 ## [1.0.3-beta.4] - 2025-12-01
 
 ### Added

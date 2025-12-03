@@ -334,6 +334,10 @@ Examples from your current vault (keep future entries equally abstract):
             ? `\nWarnings:\n- ${versionCheck.warnings.join("\n- ")}`
             : "";
 
+        const locationText = remoteConfig
+          ? `Remote: ${remoteConfig.baseUrl}`
+          : `Local DB: ${getDatabasePath()}`;
+
         return {
           content: [
             {
@@ -345,7 +349,7 @@ Type: ${savedSolution.errorType}
 Tags: ${savedSolution.tags.join(", ")}
 
 Database now contains ${totalCount} solution(s).
-Location: ${getDatabasePath()}
+Location: ${locationText}
 
 You can search for this solution later using 'search-solutions' with keywords like:
 - "${tags[0] || "error"}"
@@ -941,6 +945,42 @@ async function runCli(argv: string[]) {
       console.log(
         "Precedence: flag > env > saved config. Set values with --remote-url/--api-key or clear with --clear."
       );
+    });
+
+  program
+    .command("diagnose")
+    .description("Check whether Context8 is running in remote or local mode and validate connectivity")
+    .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
+    .option("--api-key <key>", "API key for remote server (overrides env/config)")
+    .action(async (opts) => {
+      const remote = resolveRemoteConfig(opts.remoteUrl, opts.apiKey);
+      if (remote) {
+        console.log(describeRemoteSource(remote.baseUrl, remote.apiKey));
+        try {
+          const total = await remoteGetSolutionCount(remote);
+          console.log(`Mode: remote (reachable) | Solutions: ${total}`);
+        } catch (error) {
+          console.error(
+            `Mode: remote (unreachable) | Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      try {
+        const total = await getSolutionCount();
+        console.log(`Mode: local | DB: ${getDatabasePath()} | Solutions: ${total}`);
+      } catch (error) {
+        console.error(
+          `Mode: local (error reading DB) | Error: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        process.exitCode = 1;
+      }
     });
 
   program
