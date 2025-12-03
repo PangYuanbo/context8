@@ -334,6 +334,10 @@ Examples from your current vault (keep future entries equally abstract):
             ? `\nWarnings:\n- ${versionCheck.warnings.join("\n- ")}`
             : "";
 
+        const locationText = remoteConfig
+          ? `Remote: ${remoteConfig.baseUrl}`
+          : `Local DB: ${getDatabasePath()}`;
+
         return {
           content: [
             {
@@ -345,7 +349,7 @@ Type: ${savedSolution.errorType}
 Tags: ${savedSolution.tags.join(", ")}
 
 Database now contains ${totalCount} solution(s).
-Location: ${getDatabasePath()}
+Location: ${locationText}
 
 You can search for this solution later using 'search-solutions' with keywords like:
 - "${tags[0] || "error"}"
