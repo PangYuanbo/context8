@@ -903,7 +903,9 @@ async function runCli(argv: string[]) {
 
   program
     .command("remote-config")
-    .description("Set or view remote Context8 server configuration (URL/API key)")
+    .description(
+      "Set or view remote Context8 server configuration (URL/API key). Use https://api.context8.org (no trailing slash). API keys must be created via /apikeys on context8.org with an email-verified user."
+    )
     .option("--remote-url <url>", "Remote Context8 server base URL to save")
     .option("--api-key <key>", "API key for the remote server")
     .option("--show", "Show saved configuration")
