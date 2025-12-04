@@ -2,6 +2,17 @@
 
 All notable changes to the Context8 MCP Server will be documented in this file.
 
+## [1.0.3-beta.6] - 2025-12-03
+
+### Changed
+
+- Heavy local dependencies (`better-sqlite3`, `@xenova/transformers`) are now optional peer deps; far-end/remote mode no longer imports them.
+- Local database code is lazily loaded only when running in local mode; missing deps now surface a clear install hint instead of hard failure.
+
+### Fixed
+
+- CLI diagnostics avoid touching local DB when running remote mode; startup logs now reflect remote vs local mode without forcing local imports.
+
 ## [1.0.3-beta.5] - 2025-12-03
 
 ### Added

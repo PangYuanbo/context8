@@ -45,6 +45,9 @@ Context8 remembers everything for you:
 - Node.js >= v18.0.0
 - Cursor, Claude Code, VSCode, Windsurf or another MCP Client
 - npm or compatible package manager (npx, bunx, etc.)
+- Local mode needs optional deps for SQLite + embeddings:
+  - `npm i better-sqlite3 @xenova/transformers` (global or project-local)
+  - Remote-only mode can skip these; the MCP lazily loads them only when you run local mode.
 
 > [!IMPORTANT]
 > **Stdio MCP only; cloud optional**

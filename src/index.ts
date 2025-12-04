@@ -9,19 +9,6 @@ import { execSync } from "child_process";
 import { Command } from "commander";
 import { ErrorType } from "./lib/types.js";
 import {
-  saveSolution,
-  searchSolutions,
-  getSolutionById,
-  getSolutionsByIds,
-  getSolutionCount,
-  getDatabasePath,
-  listSolutions,
-  getAllSolutions,
-  deleteSolution,
-  checkDatabaseHealth,
-  migrateDatabase,
-} from "./lib/database.js";
-import {
   getCachedContext7Doc,
   setCachedContext7Doc,
   getContext7CachePath,
@@ -45,6 +32,26 @@ import {
 } from "./lib/sync.js";
 
 const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
+
+type LocalDbModule = typeof import("./lib/database.js");
+
+let localDbModulePromise: Promise<LocalDbModule> | null = null;
+
+async function loadLocalDbModule(): Promise<LocalDbModule> {
+  if (!localDbModulePromise) {
+    localDbModulePromise = import("./lib/database.js");
+  }
+
+  try {
+    return await localDbModulePromise;
+  } catch (error) {
+    localDbModulePromise = null;
+    const hint =
+      "Local mode requires optional deps better-sqlite3 and @xenova/transformers. Install them with `npm i better-sqlite3 @xenova/transformers` or switch to remote mode.";
+    const suffix = error instanceof Error ? ` (${error.message})` : "";
+    throw new Error(`${hint}${suffix}`);
+  }
+}
 
 /**
  * Context8 MCP Server
@@ -295,48 +302,51 @@ Examples from your current vault (keep future entries equally abstract):
           console.warn(`Environment/version warnings: ${versionCheck.warnings.join(" | ")}`);
         }
 
-        const savedSolution = remoteConfig
-          ? await remoteSaveSolution(remoteConfig, {
-              title,
-              errorMessage,
-              errorType,
-              context,
-              rootCause,
-              solution,
-              codeChanges,
-              tags,
-              labels,
-              cliLibraryId,
-              projectPath,
-              environment: mergedEnvironment,
-            })
-          : await saveSolution({
-              title,
-              errorMessage,
-              errorType,
-              context,
-              rootCause,
-              solution,
-              codeChanges,
-              tags,
-              labels,
-              cliLibraryId,
-              projectPath,
-              environment: mergedEnvironment,
-            });
+        let savedSolution;
+        let totalCount;
+        let locationText: string;
 
-        const totalCount = remoteConfig
-          ? await remoteGetSolutionCount(remoteConfig)
-          : await getSolutionCount();
+        if (remoteConfig) {
+          savedSolution = await remoteSaveSolution(remoteConfig, {
+            title,
+            errorMessage,
+            errorType,
+            context,
+            rootCause,
+            solution,
+            codeChanges,
+            tags,
+            labels,
+            cliLibraryId,
+            projectPath,
+            environment: mergedEnvironment,
+          });
+          totalCount = await remoteGetSolutionCount(remoteConfig);
+          locationText = `Remote: ${remoteConfig.baseUrl}`;
+        } else {
+          const db = await loadLocalDbModule();
+          savedSolution = await db.saveSolution({
+            title,
+            errorMessage,
+            errorType,
+            context,
+            rootCause,
+            solution,
+            codeChanges,
+            tags,
+            labels,
+            cliLibraryId,
+            projectPath,
+            environment: mergedEnvironment,
+          });
+          totalCount = await db.getSolutionCount();
+          locationText = `Local DB: ${db.getDatabasePath()}`;
+        }
 
         const warningText =
           versionCheck.warnings.length > 0
             ? `\nWarnings:\n- ${versionCheck.warnings.join("\n- ")}`
             : "";
-
-        const locationText = remoteConfig
-          ? `Remote: ${remoteConfig.baseUrl}`
-          : `Local DB: ${getDatabasePath()}`;
 
         return {
           content: [
@@ -412,16 +422,20 @@ After reviewing the results, use 'batch-get-solutions' to retrieve full details 
           : undefined;
         const effectiveLimit = limit || defaultLimitEnv || 25;
 
-        const results = remoteConfig
-          ? await remoteSearchSolutions(remoteConfig, query, effectiveLimit, {
-              mode: mode || "hybrid",
-            })
-          : await searchSolutions(query, effectiveLimit, {
-              mode: mode || "hybrid",
-            });
-        const totalCount = remoteConfig
-          ? await remoteGetSolutionCount(remoteConfig)
-          : await getSolutionCount();
+        let results;
+        let totalCount;
+        if (remoteConfig) {
+          results = await remoteSearchSolutions(remoteConfig, query, effectiveLimit, {
+            mode: mode || "hybrid",
+          });
+          totalCount = await remoteGetSolutionCount(remoteConfig);
+        } else {
+          const db = await loadLocalDbModule();
+          results = await db.searchSolutions(query, effectiveLimit, {
+            mode: mode || "hybrid",
+          });
+          totalCount = await db.getSolutionCount();
+        }
 
         if (results.length === 0) {
           return {
@@ -500,7 +514,7 @@ The solution ID is returned by the search-solutions tool.`,
       try {
         const solution = remoteConfig
           ? await remoteGetSolutionById(remoteConfig, solutionId)
-          : await getSolutionById(solutionId);
+          : await (await loadLocalDbModule()).getSolutionById(solutionId);
 
         if (!solution) {
           return {
@@ -595,7 +609,7 @@ This is more efficient than calling 'get-solution-detail' multiple times.`,
       try {
         const solutions = remoteConfig
           ? await remoteGetSolutionsByIds(remoteConfig, solutionIds)
-          : await getSolutionsByIds(solutionIds);
+          : await (await loadLocalDbModule()).getSolutionsByIds(solutionIds);
 
         if (solutions.length === 0) {
           return {
@@ -697,7 +711,7 @@ The deletion also removes the sparse index and stats so the DB stays consistent.
       try {
         const deleted = remoteConfig
           ? await remoteDeleteSolution(remoteConfig, id)
-          : await deleteSolution(id);
+          : await (await loadLocalDbModule()).deleteSolution(id);
 
         if (!deleted) {
           return {
@@ -712,7 +726,7 @@ The deletion also removes the sparse index and stats so the DB stays consistent.
 
         const remaining = remoteConfig
           ? await remoteGetSolutionCount(remoteConfig)
-          : await getSolutionCount();
+          : await (await loadLocalDbModule()).getSolutionCount();
 
         return {
           content: [
@@ -820,12 +834,31 @@ async function main() {
     return;
   }
 
+  const resolved = resolveRemoteConfig();
   const server = createServerInstance();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Context8 MCP Server running on stdio");
-  console.error(`Database location: ${getDatabasePath()}`);
-  console.error(`Total solutions: ${await getSolutionCount()}`);
+  if (resolved) {
+    console.error(`Mode: remote (${resolved.baseUrl})`);
+    try {
+      console.error(`Total solutions: ${await remoteGetSolutionCount(resolved)}`);
+    } catch (error) {
+      console.error(
+        `Failed to query remote count: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  } else {
+    try {
+      const db = await loadLocalDbModule();
+      console.error(`Database location: ${db.getDatabasePath()}`);
+      console.error(`Total solutions: ${await db.getSolutionCount()}`);
+    } catch (error) {
+      console.error(
+        `Local DB unavailable: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 }
 
 main().catch((error) => {
@@ -843,7 +876,8 @@ async function runCli(argv: string[]) {
     .option("-l, --limit <number>", "Number of items", (v) => parseInt(v, 10), 20)
     .option("-o, --offset <number>", "Offset for pagination", (v) => parseInt(v, 10), 0)
     .action(async (opts) => {
-      const items = await listSolutions(opts.limit, opts.offset);
+      const db = await loadLocalDbModule();
+      const items = await db.listSolutions(opts.limit, opts.offset);
       if (items.length === 0) {
         console.log("No solutions found.");
         return;
@@ -866,7 +900,7 @@ async function runCli(argv: string[]) {
         const resolvedRemote = resolveRemoteConfig();
         const results = resolvedRemote
           ? await remoteSearchSolutions(resolvedRemote, query, opts.limit, { mode: opts.mode })
-          : await searchSolutions(query, opts.limit, { mode: opts.mode });
+          : await (await loadLocalDbModule()).searchSolutions(query, opts.limit, { mode: opts.mode });
         if (results.length === 0) {
           console.log("No results.");
           return;
@@ -892,7 +926,8 @@ async function runCli(argv: string[]) {
     .description("Delete a solution by ID")
     .argument("<id>", "Solution ID")
     .action(async (id) => {
-      const ok = await deleteSolution(id);
+      const db = await loadLocalDbModule();
+      const ok = await db.deleteSolution(id);
       if (ok) {
         console.log(`Deleted solution ${id}`);
       } else {
@@ -974,8 +1009,9 @@ async function runCli(argv: string[]) {
       }
 
       try {
-        const total = await getSolutionCount();
-        console.log(`Mode: local | DB: ${getDatabasePath()} | Solutions: ${total}`);
+        const db = await loadLocalDbModule();
+        const total = await db.getSolutionCount();
+        console.log(`Mode: local | DB: ${db.getDatabasePath()} | Solutions: ${total}`);
         process.exit(0);
       } catch (error) {
         console.error(
@@ -1015,7 +1051,8 @@ async function runCli(argv: string[]) {
       const timeoutMs = Number.isFinite(opts.timeout) && opts.timeout > 0 ? opts.timeout : 10000;
       process.env.CONTEXT8_REQUEST_TIMEOUT = String(timeoutMs);
 
-      const items = await getAllSolutions();
+      const db = await loadLocalDbModule();
+      const items = await db.getAllSolutions();
       if (items.length === 0) {
         console.log("No local solutions found to push.");
         return;
@@ -1119,29 +1156,38 @@ async function runCli(argv: string[]) {
     .option("-p, --package <name>", "Package name", pkgJson.name)
     .action(async (opts) => {
       try {
-        migrateDatabase();
-        console.log("DB migration check: schema/index ensured.");
-      } catch (err) {
-        console.warn(
-          `DB migration step failed: ${err instanceof Error ? err.message : "unknown error"}`
-        );
-      }
-
-      try {
-        const health = await checkDatabaseHealth();
-        if (health.ok) {
-          console.log(
-            `DB OK at ${health.path} (${health.count ?? 0} record${(health.count ?? 0) === 1 ? "" : "s"})`
-          );
-        } else {
+        const db = await loadLocalDbModule();
+        try {
+          db.migrateDatabase();
+          console.log("DB migration check: schema/index ensured.");
+        } catch (err) {
           console.warn(
-            `DB check reported issues at ${health.path}: ${health.message}${
-              health.issues ? ` [${health.issues.join(", ")}]` : ""
-            }`
+            `DB migration step failed: ${err instanceof Error ? err.message : "unknown error"}`
           );
         }
+
+        try {
+          const health = await db.checkDatabaseHealth();
+          if (health.ok) {
+            console.log(
+              `DB OK at ${health.path} (${health.count ?? 0} record${(health.count ?? 0) === 1 ? "" : "s"})`
+            );
+          } else {
+            console.warn(
+              `DB check reported issues at ${health.path}: ${health.message}${
+                health.issues ? ` [${health.issues.join(", ")}]` : ""
+              }`
+            );
+          }
+        } catch (err) {
+          console.warn(`DB check failed: ${err instanceof Error ? err.message : "unknown error"}`);
+        }
       } catch (err) {
-        console.warn(`DB check failed: ${err instanceof Error ? err.message : "unknown error"}`);
+        console.warn(
+          `Local DB unavailable (optional deps missing or not installed): ${
+            err instanceof Error ? err.message : "unknown error"
+          }`
+        );
       }
 
       const pkgName = opts.package as string;
