@@ -961,27 +961,29 @@ async function runCli(argv: string[]) {
         try {
           const total = await remoteGetSolutionCount(remote);
           console.log(`Mode: remote (reachable) | Solutions: ${total}`);
+          process.exit(0);
         } catch (error) {
           console.error(
             `Mode: remote (unreachable) | Error: ${
               error instanceof Error ? error.message : String(error)
             }`
           );
-          process.exitCode = 1;
+          process.exit(1);
         }
-        return;
+        return; // unreachable but explicit
       }
 
       try {
         const total = await getSolutionCount();
         console.log(`Mode: local | DB: ${getDatabasePath()} | Solutions: ${total}`);
+        process.exit(0);
       } catch (error) {
         console.error(
           `Mode: local (error reading DB) | Error: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
-        process.exitCode = 1;
+        process.exit(1);
       }
     });
 
