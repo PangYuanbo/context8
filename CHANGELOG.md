@@ -13,6 +13,10 @@ All notable changes to the Context8 MCP Server will be documented in this file.
 
 - CLI diagnostics avoid touching local DB when running remote mode; startup logs now reflect remote vs local mode without forcing local imports.
 
+### Added
+
+- CLI `setup-local` command to install optional local deps (`better-sqlite3`, `@xenova/transformers`) via npm/pnpm/yarn/bun.
+
 ## [1.0.3-beta.5] - 2025-12-03
 
 ### Added

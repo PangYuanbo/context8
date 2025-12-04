@@ -1024,6 +1024,36 @@ async function runCli(argv: string[]) {
     });
 
   program
+    .command("setup-local")
+    .description("Install optional local dependencies (better-sqlite3, @xenova/transformers)")
+    .option("--package-manager <pm>", "Package manager to use (npm|pnpm|yarn|bun)", "npm")
+    .action(async (opts) => {
+      const pm = typeof opts.packageManager === "string" ? opts.packageManager : "npm";
+      const pkgs = ["better-sqlite3", "@xenova/transformers"];
+      const cmd =
+        pm === "pnpm"
+          ? `pnpm add ${pkgs.join(" ")}`
+          : pm === "yarn"
+            ? `yarn add ${pkgs.join(" ")}`
+            : pm === "bun"
+              ? `bun add ${pkgs.join(" ")}`
+              : `npm install ${pkgs.join(" ")}`;
+
+      console.log(`Installing local deps with: ${cmd}`);
+      try {
+        execSync(cmd, { stdio: "inherit" });
+        console.log("Local dependencies installed. You can now run in local mode.");
+      } catch (error) {
+        console.error(
+          `Installation failed. Try manual install: ${cmd}\n${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  program
     .command("push-remote")
     .description("Upload all local solutions to a remote Context8 server")
     .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
