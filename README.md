@@ -45,7 +45,7 @@ Context8 remembers everything for you:
 - Node.js >= v18.0.0
 - Cursor, Claude Code, VSCode, Windsurf or another MCP Client
 - npm or compatible package manager (npx, bunx, etc.)
-- Local mode needs optional deps for SQLite + embeddings:
+- Local mode needs optional deps for SQLite + embeddings (kept out of the lightweight default install):
   - `npm i better-sqlite3 @xenova/transformers` (global or project-local)
   - or run `context8-mcp setup-local` to install with npm/pnpm/yarn/bun (uses npm by default)
   - Remote-only mode can skip these; the MCP lazily loads them only when you run local mode.
@@ -71,9 +71,14 @@ Context8 remembers everything for you:
 > ```
 
 > [!NOTE]
-> **Remote mode (applies to any client below)**
+> **Remote vs Local**
 >
-> Add these env vars to your MCP client config to use the cloud backend (API key from an email-verified account at https://www.context8.org):
+> - Remote: set `CONTEXT8_REMOTE_URL` + `CONTEXT8_REMOTE_API_KEY` (env or `context8-mcp remote-config`). This stays lightweight—no `better-sqlite3` / `@xenova/transformers` pulled.
+> - Local: leave those env vars unset; run `context8-mcp setup-local` once to install the optional deps, data lives at `~/.context8/`.
+> - Switch: to return from remote to local, unset the envs or run `context8-mcp remote-config --clear`; re-enable remote by re-adding the envs or `remote-config --remote-url ... --api-key ...`.
+> - Context7 (optional): set `CONTEXT7_API_KEY` if you want the Context7 docs tool while in local mode. The `context7-cached-docs` tool is disabled in remote mode.
+>
+> Example env block (any MCP client):
 > ```json
 > {
 >   "env": {
@@ -83,19 +88,6 @@ Context8 remembers everything for you:
 >   }
 > }
 > ```
-> If unset, Context8 runs locally in `~/.context8/`.
-
-> [!NOTE]
-> **Remote mode env (any client)**
->
-> Set these to point the MCP to your cloud backend (API key must come from an email-verified account at https://www.context8.org):
->
-> ```
-> CONTEXT8_REMOTE_URL=https://api.context8.org
-> CONTEXT8_REMOTE_API_KEY=<your-api-key>
-> ```
->
-> If unset, Context8 runs purely local in `~/.context8/`.
 
 <details>
 <summary><b>Installing via Smithery</b></summary>
@@ -146,6 +138,7 @@ If you want to use Context7's cached documentation feature:
     }
   }
 }
+```
 
 #### With Remote Mode (cloud)
 ```json
@@ -163,7 +156,7 @@ If you want to use Context7's cached documentation feature:
 }
 ```
 API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only.
-```
+If you switch back to local, unset them or run `context8-mcp remote-config --clear`, then run `context8-mcp setup-local` when you need local embeddings.
 
 </details>
 
@@ -191,7 +184,7 @@ claude mcp add context8 \
   -- npx -y context8-mcp
 ```
 
-API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only.
+API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only; to return to local mode, unset or `remote-config --clear`, then run `context8-mcp setup-local` if you need local embeddings.
 
 </details>
 

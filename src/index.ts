@@ -53,6 +53,21 @@ async function loadLocalDbModule(): Promise<LocalDbModule> {
   }
 }
 
+function isMissingLocalDeps(error: unknown): error is Error {
+  return error instanceof Error && error.message.includes("Local mode requires optional deps");
+}
+
+function printLocalDepHelp(): void {
+  console.error(
+    [
+      "Local mode requires optional deps better-sqlite3 and @xenova/transformers.",
+      "Fix options:",
+      "- Run: context8-mcp setup-local",
+      "- Or switch to remote mode: context8-mcp remote-config --remote-url https://api.context8.org --api-key <key> (or set env CONTEXT8_REMOTE_URL/CONTEXT8_REMOTE_API_KEY)",
+    ].join("\n")
+  );
+}
+
 /**
  * Context8 MCP Server
  * A local knowledge base for storing and retrieving error solutions with semantic search
@@ -749,12 +764,13 @@ The deletion also removes the sparse index and stats so the DB stays consistent.
     }
   );
 
-  // Register Context7 cached docs fetcher
-  server.registerTool(
-    "context7-cached-docs",
-    {
-      title: "Context7 Cached Docs",
-      description: `Fetch Context7 library docs with local caching. Checks the local cache first; on miss, calls Context7 and stores the result for reuse.
+  // Register Context7 cached docs fetcher (local mode only; remote mode disables to avoid optional deps)
+  if (!remoteConfig) {
+    server.registerTool(
+      "context7-cached-docs",
+      {
+        title: "Context7 Cached Docs",
+        description: `Fetch Context7 library docs with local caching. Checks the local cache first; on miss, calls Context7 and stores the result for reuse.
 
 Requirements:
 - Always provide a VERSIONED library id: format '/org/project/version' (avoid bare '/org/project').
@@ -764,73 +780,83 @@ Examples:
 - /vercel/next.js/v15.1.8 with topic='routing', page=1
 - /facebook/react/v19.0.0 with topic='hooks', page=1
 - /supabase/supabase-js/v2.45.4 with topic='auth', page=2`,
-      inputSchema: {
-        context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
-        libraryId: z.string().describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
-        topic: z.string().optional().describe("Docs topic (optional)"),
-        page: z.number().int().min(1).max(10).optional().describe("Page number (default 1)"),
-        forceRefresh: z.boolean().optional().describe("If true, bypass cache and refresh"),
+        inputSchema: {
+          context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
+          libraryId: z.string().describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
+          topic: z.string().optional().describe("Docs topic (optional)"),
+          page: z.number().int().min(1).max(10).optional().describe("Page number (default 1)"),
+          forceRefresh: z.boolean().optional().describe("If true, bypass cache and refresh"),
+        },
       },
-    },
-    async ({ context7ApiKey, libraryId, topic, page = 1, forceRefresh = false }) => {
-      const apiKey = context7ApiKey || process.env.CONTEXT7_API_KEY;
+      async ({ context7ApiKey, libraryId, topic, page = 1, forceRefresh = false }) => {
+        const apiKey = context7ApiKey || process.env.CONTEXT7_API_KEY;
 
-      try {
-        if (!forceRefresh) {
-          const cached = await getCachedContext7Doc(libraryId, topic, page);
-          if (cached) {
-            return {
-              content: [
-                { type: "text", text: cached },
-                {
-                  type: "text",
-                  text: `(served from cache at ${getContext7CachePath()})`,
-                },
-              ],
-            };
+        try {
+          if (!forceRefresh) {
+            const cached = await getCachedContext7Doc(libraryId, topic, page);
+            if (cached) {
+              return {
+                content: [
+                  { type: "text", text: cached },
+                  {
+                    type: "text",
+                    text: `(served from cache at ${getContext7CachePath()})`,
+                  },
+                ],
+              };
+            }
           }
+
+          const fetched = await callContext7Tool(
+            "get-library-docs",
+            {
+              context7CompatibleLibraryID: libraryId,
+              topic,
+              page,
+            },
+            apiKey
+          );
+
+          await setCachedContext7Doc(libraryId, topic, page, fetched);
+
+          return {
+            content: [
+              { type: "text", text: fetched },
+              {
+                type: "text",
+                text: `(cached at ${getContext7CachePath()})`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Context7 fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+              },
+            ],
+          };
         }
-
-        const fetched = await callContext7Tool(
-          "get-library-docs",
-          {
-            context7CompatibleLibraryID: libraryId,
-            topic,
-            page,
-          },
-          apiKey
-        );
-
-        await setCachedContext7Doc(libraryId, topic, page, fetched);
-
-        return {
-          content: [
-            { type: "text", text: fetched },
-            {
-              type: "text",
-              text: `(cached at ${getContext7CachePath()})`,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Context7 fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-        };
       }
-    }
-  );
+    );
+  }
 
   return server;
 }
 
 async function main() {
   if (process.argv.length > 2) {
-    await runCli(process.argv);
+    try {
+      await runCli(process.argv);
+    } catch (error) {
+      if (isMissingLocalDeps(error)) {
+        printLocalDepHelp();
+        process.exit(1);
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -862,6 +888,11 @@ async function main() {
 }
 
 main().catch((error) => {
+  if (isMissingLocalDeps(error)) {
+    printLocalDepHelp();
+    process.exit(1);
+    return;
+  }
   console.error("Fatal error in main():", error);
   process.exit(1);
 });
@@ -876,16 +907,25 @@ async function runCli(argv: string[]) {
     .option("-l, --limit <number>", "Number of items", (v) => parseInt(v, 10), 20)
     .option("-o, --offset <number>", "Offset for pagination", (v) => parseInt(v, 10), 0)
     .action(async (opts) => {
-      const db = await loadLocalDbModule();
-      const items = await db.listSolutions(opts.limit, opts.offset);
-      if (items.length === 0) {
-        console.log("No solutions found.");
-        return;
-      }
-      for (const item of items) {
-        console.log(
-          `${item.id} | ${item.createdAt} | ${item.errorType} | ${item.tags.join(", ")} | ${item.title}`
-        );
+      try {
+        const db = await loadLocalDbModule();
+        const items = await db.listSolutions(opts.limit, opts.offset);
+        if (items.length === 0) {
+          console.log("No solutions found.");
+          return;
+        }
+        for (const item of items) {
+          console.log(
+            `${item.id} | ${item.createdAt} | ${item.errorType} | ${item.tags.join(", ")} | ${item.title}`
+          );
+        }
+      } catch (error) {
+        if (isMissingLocalDeps(error)) {
+          printLocalDepHelp();
+        } else {
+          console.error(error instanceof Error ? error.message : String(error));
+        }
+        process.exit(1);
       }
     });
 
@@ -916,8 +956,18 @@ async function runCli(argv: string[]) {
           }
         }
       } catch (err) {
-        console.error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
-        process.exitCode = 1;
+        const resolvedRemote = resolveRemoteConfig();
+        if (resolvedRemote) {
+          console.error(
+            `Remote search failed: ${err instanceof Error ? err.message : String(err)}. ` +
+              "Check network/connectivity/API key, or clear remote config with `context8-mcp remote-config --clear` to use local mode."
+          );
+        } else if (isMissingLocalDeps(err)) {
+          printLocalDepHelp();
+        } else {
+          console.error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        process.exit(1);
       }
     });
 
@@ -926,13 +976,22 @@ async function runCli(argv: string[]) {
     .description("Delete a solution by ID")
     .argument("<id>", "Solution ID")
     .action(async (id) => {
-      const db = await loadLocalDbModule();
-      const ok = await db.deleteSolution(id);
-      if (ok) {
-        console.log(`Deleted solution ${id}`);
-      } else {
-        console.error(`Solution not found: ${id}`);
-        process.exitCode = 1;
+      try {
+        const db = await loadLocalDbModule();
+        const ok = await db.deleteSolution(id);
+        if (ok) {
+          console.log(`Deleted solution ${id}`);
+        } else {
+          console.error(`Solution not found: ${id}`);
+          process.exitCode = 1;
+        }
+      } catch (error) {
+        if (isMissingLocalDeps(error)) {
+          printLocalDepHelp();
+        } else {
+          console.error(error instanceof Error ? error.message : String(error));
+        }
+        process.exit(1);
       }
     });
 
@@ -992,8 +1051,8 @@ async function runCli(argv: string[]) {
     .action(async (opts) => {
       const remote = resolveRemoteConfig(opts.remoteUrl, opts.apiKey);
       if (remote) {
-        console.log(describeRemoteSource(remote.baseUrl, remote.apiKey));
         try {
+          console.log(describeRemoteSource(remote.baseUrl, remote.apiKey));
           const total = await remoteGetSolutionCount(remote);
           console.log(`Mode: remote (reachable) | Solutions: ${total}`);
           process.exit(0);

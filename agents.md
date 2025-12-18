@@ -201,8 +201,12 @@ tailwindcss + shadcn
 15. Context8 云写入可直接使用 X-API-Key POST `/solutions`（必填 title/errorMessage/errorType/context/rootCause/solution/tags）；写入后可用 `/search` 立即查询确认（已验证 Modal 实例成功写入并可检索）。
 16. Context8 CLI 远端同步：`remote-config` 将 URL/API Key 写入 `~/.context8/config.json`（优先级 flags > env > 文件）；`push-remote` 支持 dry-run/force/concurrency，去重映射存于 `~/.context8/remote-sync.json`。
 17. Context8 检索实现为自建稀疏倒排索引（inverted_index + solution_stats）与稠密向量混排，无 SQLite FTS 虚表；空索引由 ensureSparseIndex 回填。
-18. 配置远端时依然保留本地 `context7-cached-docs` 工具，写代码前可照常先查 Context7 文档，不因远端模式缺失。
+18. `context7-cached-docs` 仅在本地模式注册，配置远端 URL 会禁用该工具；需要文档时先清理远端配置回到本地模式再用。
 19. 仓库内禁止硬编码任何真实凭证（数据库 URL、密码、API Key 等），测试脚本一律用环境变量或占位符，避免泄露。
 20. 远端计数统一走 `GET /solutions/count`（按 user_id 过滤）；旧版本缺少端点时客户端仅用 limit=0 的搜索做近似统计，不再使用 `"*"` 查询。
 21. SQLite 查询结果映射统一走强类型行结构（SolutionRow/SolutionEmbeddingRow/SolutionStatsRow/SolutionPreviewRow），避免 any，mapRowToSolution 作为唯一出口。
 22. Context7 工具调用需要对响应做类型守卫，只在存在 text 内容时返回，防止空响应路径抛错。
+23. Context8 MCP 默认安装保持轻量（不拉取 `better-sqlite3`/`@xenova/transformers`）；远端模式通过 `CONTEXT8_REMOTE_URL`/`CONTEXT8_REMOTE_API_KEY` 开启，回到本地模式需清理远端配置后运行 `context8-mcp setup-local` 拉取可选依赖。
+24. Context7 缓存改为动态加载 `better-sqlite3`，缺依赖时抛出友好提示；远端模式不注册该工具避免强依赖。
+25. CLI 遇到缺本地依赖时主动提示两条路径：`context8-mcp setup-local` 或配置远端 URL/API Key，不再仅抛栈。
+26. 远端计数失败时不再静默返回 0；primary 与 fallback 都失败则抛错，diagnose 直观标记 remote unreachable。
