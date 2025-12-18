@@ -1,79 +1,35 @@
 # Context8 Quick Start Guide
 
-Get up and running with Context8 MCP Server in 5 minutes!
+Get up and running with Context8 MCP Server in 5 minutes (v1.0.3).
 
 ## Prerequisites
 
-- Node.js 18+ installed
-- Claude Desktop (or any MCP-compatible client)
+- Node.js 18+
+- An MCP client (Claude Code/Desktop, Cursor, VS Code MCP, etc.)
+- Optional: Context8 cloud API key (email-verified) if you want remote mode
 
-## Step 1: Build the Server
+## Step 1: Install via npx
+
+- Claude Code/Desktop: `claude mcp add context8 -- npx -y context8-mcp`
+- Any other client: command `npx`, args `-y`, `context8-mcp` in the MCP config.
+
+## Step 2: Pick your mode
+
+- **Remote (lightweight)**: Set `CONTEXT8_REMOTE_URL` and `CONTEXT8_REMOTE_API_KEY` in your MCP config, or run `context8-mcp remote-config --remote-url https://api.context8.org --api-key <key>`. Optional deps stay uninstalled.
+- **Local (offline embeddings)**: Leave those envs unset (or `context8-mcp remote-config --clear`), then run `npx context8-mcp setup-local` once to pull `better-sqlite3` + `@xenova/transformers`. Data lives in `~/.context8/`.
+- **Switch anytime**: Add/remove the envs above; run `setup-local` only when you actually want local embeddings.
+
+## Step 3: Verify
 
 ```bash
-cd context8
-npm install
-npm run build
+npx context8-mcp diagnose
 ```
 
-Expected output:
+You should see whether you're in remote or local mode, plus connectivity and total counts.
 
-```
-added 293 packages
-```
+## Step 4: Save your first solution
 
-## Step 2: Configure Claude Desktop
-
-### Windows
-
-Edit `%APPDATA%\Claude\claude_desktop_config.json`
-
-### macOS
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-### Linux
-
-Edit `~/.config/Claude/claude_desktop_config.json`
-
-Add this configuration:
-
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "node",
-      "args": ["C:/Users/aaron/Desktop/MCP/context8/dist/index.js"]
-    }
-  }
-}
-```
-
-**Note**: Use the absolute path to your `context8/dist/index.js` file!
-
-## Step 3: Restart Claude Desktop
-
-Close and reopen Claude Desktop to load the new MCP server.
-
-## Step 4: Verify Installation
-
-In Claude Desktop, try this prompt:
-
-```
-Search my error solutions for "react"
-```
-
-If the server is working, you'll see:
-
-```
-No solutions found for "react".
-Knowledge base contains 0 total solution(s).
-```
-
-Perfect! Your Context8 is ready.
-
-## Step 5: Save Your First Solution
-
-Try this prompt in Claude:
+Ask your MCP client:
 
 ```
 I want to save an error solution:
@@ -87,38 +43,19 @@ Solution: Move all hooks to the top of the component before any conditional logi
 Tags: react, hooks, typescript
 ```
 
-Claude will use the `save-error-solution` tool to save this to your local database!
-
-## Step 6: Search for Solutions
-
-Now search for it:
+## Step 5: Search for it
 
 ```
 Search my error solutions for "hook conditionally"
 ```
 
-You should see your saved solution with a similarity score!
+You should see your saved solution with a similarity score.
 
-## Common Commands
+## Common prompts
 
-### Save a Solution (when you fix an error)
-
-```
-Save this error solution to my knowledge base:
-[describe the error and solution]
-```
-
-### Search for Solutions
-
-```
-Search my error solutions for "typescript type error"
-```
-
-### Get Solution Details
-
-```
-Show me the full details for solution ID abc123-def456
-```
+- Save a solution: `Save this error solution to my knowledge base: [describe the error and fix]`
+- Search: `Search my error solutions for "typescript type error"`
+- Get details: `Show me the full details for solution ID abc123-def456`
 
 ### Batch Retrieve Multiple Solutions
 
@@ -128,10 +65,12 @@ Get me the full details for these solutions: abc123, def456, xyz789
 
 ## Database Location
 
-Your solutions are stored at:
+In local mode, your solutions are stored at:
 
 - **Windows**: `C:\Users\YourUsername\.context8\solutions.db`
 - **macOS/Linux**: `~/.context8/solutions.db`
+
+In remote mode, data stays on your configured Context8 server.
 
 ## Tips for Best Results
 
@@ -169,7 +108,7 @@ Check the Claude Desktop logs:
 - Windows: `%APPDATA%\Claude\logs\mcp*.log`
 - macOS: `~/Library/Logs/Claude/mcp*.log`
 
-### Build Failed?
+### Build Failed? (source checkout only)
 
 ```bash
 rm -rf node_modules dist
@@ -177,7 +116,7 @@ npm install
 npm run build
 ```
 
-### Database Issues?
+### Database Issues? (local mode)
 
 The database is created automatically on first use. If you want to start fresh:
 
@@ -216,6 +155,6 @@ If you encounter issues:
 1. Check the Claude Desktop logs
 2. Verify your paths in the config file
 3. Ensure Node.js 18+ is installed
-4. Make sure you ran `npm run build`
+4. If running from source, build with `npm run build`; if using npx, re-run `npx -y context8-mcp` to ensure you have the latest package
 
 Happy debugging! 🐛✨

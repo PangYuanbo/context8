@@ -1,21 +1,34 @@
-import Database from "better-sqlite3";
-import type { Database as BetterSqlite3Database } from "better-sqlite3";
 import { homedir } from "os";
 import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
+
+import type { Database as BetterSqlite3Database } from "better-sqlite3";
 
 const CACHE_DIR = join(homedir(), ".context8");
 const CACHE_DB_PATH = join(CACHE_DIR, "context7-cache.db");
 
 let cacheDb: BetterSqlite3Database | null = null;
 
-function openCacheDb(): BetterSqlite3Database {
+async function loadBetterSqlite(): Promise<any> {
+  try {
+    const mod = await import("better-sqlite3");
+    return (mod as any).default ?? mod;
+  } catch (error) {
+    const suffix = error instanceof Error ? ` (${error.message})` : "";
+    throw new Error(
+      `Context7 cache requires optional dependency better-sqlite3. Install it (or run 'context8-mcp setup-local') to use this tool.${suffix}`
+    );
+  }
+}
+
+async function openCacheDb(): Promise<BetterSqlite3Database> {
   if (cacheDb) return cacheDb;
 
   if (!existsSync(CACHE_DIR)) {
     mkdirSync(CACHE_DIR, { recursive: true });
   }
 
+  const Database = await loadBetterSqlite();
   cacheDb = new Database(CACHE_DB_PATH, { timeout: 2000 }) as BetterSqlite3Database;
   cacheDb.pragma("journal_mode = WAL");
   cacheDb.pragma("busy_timeout = 2000");
@@ -45,7 +58,7 @@ export async function getCachedContext7Doc(
   topic: string | undefined,
   page: number
 ): Promise<string | null> {
-  const db = openCacheDb();
+  const db = await openCacheDb();
   const key = buildCacheKey(libraryId, topic, page);
   const row = db
     .prepare("SELECT payload FROM context7_cache WHERE cache_key = ? LIMIT 1")
@@ -59,7 +72,7 @@ export async function setCachedContext7Doc(
   page: number,
   payload: string
 ): Promise<void> {
-  const db = openCacheDb();
+  const db = await openCacheDb();
   const key = buildCacheKey(libraryId, topic, page);
   db.prepare(
     "INSERT OR REPLACE INTO context7_cache (cache_key, library_id, topic, page, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)"

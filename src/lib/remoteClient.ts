@@ -150,12 +150,9 @@ export async function remoteGetSolutionCount(config: RemoteConfig): Promise<numb
     try {
       return await legacyCountViaSearch(config);
     } catch (error) {
-      console.warn(
-        `Remote count fallback failed; returning 0: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return 0;
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Remote count fallback failed: ${message}`);
+      throw new Error(message);
     }
   };
 
@@ -181,11 +178,8 @@ export async function remoteGetSolutionCount(config: RemoteConfig): Promise<numb
 
     throw new Error(`Remote count failed: ${await parseError(res)}`);
   } catch (error) {
-    console.warn(
-      `Remote count request failed; using search-based approximation: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Remote count request failed; using search-based approximation: ${message}`);
     return await fallback();
   }
 }
