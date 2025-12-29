@@ -40,6 +40,65 @@ Context8 remembers everything for you:
 
 ## 🛠️ Installation (local stdio; cloud optional)
 
+### ⚡ Quick Start (Recommended)
+
+The simplest way to get started with Context8 in remote mode:
+
+1. **Install globally:**
+   ```bash
+   npm install -g context8-mcp
+   ```
+
+2. **Configure remote access:**
+   ```bash
+   context8-mcp remote-config --remote-url https://api.context8.org --api-key <your-api-key>
+   ```
+   > Get your API key at https://www.context8.org (requires email verification)
+
+3. **Add to your MCP client:**
+
+   For **OpenAI Codex** (TOML format):
+   ```toml
+   [mcp_servers.context8]
+   command = "context8-mcp"
+   args = []
+   startup_timeout_ms = 30000
+   ```
+
+   For **other MCP clients** (JSON format):
+   ```json
+   {
+     "mcpServers": {
+       "context8": {
+         "command": "context8-mcp",
+         "args": []
+       }
+     }
+   }
+   ```
+
+That's it! No need to set environment variables in your MCP config—the remote URL and API key are stored locally in `~/.context8/config.json`.
+
+**Check version:**
+```bash
+context8-mcp --version
+```
+
+**Verify connection and get config paths:**
+```bash
+context8-mcp diagnose
+```
+
+This command will show:
+- ✅ Your installation paths (ready to copy-paste into MCP configs)
+- ✅ Package version
+- ✅ Current mode (remote/local) and connectivity status
+- ✅ Number of solutions stored
+
+The output includes ready-to-use config snippets for both JSON and TOML formats!
+
+---
+
 ### Requirements
 
 - Node.js >= v18.0.0
@@ -487,7 +546,35 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 <details>
 <summary><b>Install in OpenAI Codex</b></summary>
 
-Add to your OpenAI Codex MCP server settings:
+### Recommended: Global Install + Remote Config
+
+1. **Install globally:**
+   ```bash
+   npm install -g context8-mcp
+   ```
+
+2. **Configure remote (optional):**
+   ```bash
+   context8-mcp remote-config --remote-url https://api.context8.org --api-key <your-api-key>
+   ```
+
+3. **Get your config paths:**
+   ```bash
+   context8-mcp diagnose
+   ```
+   This will show ready-to-copy config snippets for both recommended and alternative setups!
+
+4. **Add to your Codex config** (copy from diagnose output):
+   ```toml
+   [mcp_servers.context8]
+   command = "context8-mcp"
+   args = []
+   startup_timeout_ms = 30000
+   ```
+
+   This is the cleanest approach—no environment variables needed in the config file!
+
+### Alternative: Using npx
 
 ```toml
 [mcp_servers.context8]
@@ -498,12 +585,26 @@ startup_timeout_ms = 20_000
 
 #### With Context7 Integration
 
+If you want Context7 docs (local mode only):
+
 ```toml
 [mcp_servers.context8]
 args = ["-y", "context8-mcp"]
 command = "npx"
 startup_timeout_ms = 20_000
 env = { CONTEXT7_API_KEY = "YOUR_API_KEY" }
+```
+
+Or with global install:
+
+```toml
+[mcp_servers.context8]
+command = "context8-mcp"
+args = []
+startup_timeout_ms = 30000
+
+[mcp_servers.context8.env]
+CONTEXT7_API_KEY = "YOUR_API_KEY"
 ```
 
 </details>
@@ -1126,13 +1227,15 @@ npx . --help
 
 Context8 MCP runs as a stdio MCP server when invoked without arguments. The following CLI commands are available:
 
-- `context8-mcp list` – List recent solutions (see CLI Usage section above)
-- `context8-mcp delete <id>` – Delete a solution by ID
-- `context8-mcp update` – Run database migrations and check for package updates
+- `context8-mcp --version` (or `-v`) – Display version number
+- `context8-mcp diagnose` – **Show installation paths with ready-to-use config snippets** (JSON/TOML), current mode (remote/local), connectivity status, and solution count. Use this to get the exact paths for MCP client configurations!
 - `context8-mcp remote-config` – Save or view remote URL/API key for cloud sync and remote mode
-- `context8-mcp diagnose` – Show whether the CLI is in remote or local mode and validate connectivity/count
-- `context8-mcp push-remote` – Upload all local solutions to a remote Context8 server (uses saved/env remote config)
+- `context8-mcp list` – List recent solutions (see CLI Usage section above)
 - `context8-mcp search "<query>" [--limit N --mode hybrid|semantic|sparse]` – Search locally or remotely (if configured)
+- `context8-mcp delete <id>` – Delete a solution by ID
+- `context8-mcp push-remote` – Upload all local solutions to a remote Context8 server (uses saved/env remote config)
+- `context8-mcp update` – Run database migrations and check for package updates
+- `context8-mcp setup-local` – Install optional local dependencies (better-sqlite3, @xenova/transformers)
 
 ### Environment Variables
 
@@ -1166,6 +1269,27 @@ You can also persist the remote URL/API key in `~/.context8/config.json` using `
 - Always supply a versioned library id (e.g., `/vercel/next.js/v15.1.8`). If you need Context7 docs while in remote mode, disable remote or run a local instance.
 
 ## 🚨 Troubleshooting
+
+<details>
+<summary><b>MCP Server Failed to Start / Path Issues</b></summary>
+
+If your MCP client fails to start Context8, use the `diagnose` command to get the correct paths:
+
+```bash
+context8-mcp diagnose
+```
+
+This will show:
+1. **Installation paths** - The exact paths to use in your config
+2. **Ready-to-use config snippets** - Copy-paste snippets for both JSON and TOML formats
+3. **Recommended vs Alternative configs** - Choose the one that works for your setup
+
+**Common solutions:**
+- ✅ Use `"command": "context8-mcp"` with `"args": []` (recommended if globally installed)
+- ✅ Use `"command": "node"` with the full path from diagnose output (alternative)
+- ✅ Make sure the path shown in diagnose exists and is accessible
+
+</details>
 
 <details>
 <summary><b>Database Locked Error</b></summary>

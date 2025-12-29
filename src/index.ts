@@ -68,6 +68,42 @@ function printLocalDepHelp(): void {
   );
 }
 
+function getInstallationPaths(): {
+  currentExecutable: string;
+  globalInstall: string | null;
+  npmGlobalRoot: string | null;
+} {
+  // Get current executable path
+  const currentExecutable = process.argv[1];
+
+  // Try to find global installation
+  let globalInstall: string | null = null;
+  let npmGlobalRoot: string | null = null;
+
+  try {
+    // Try to get npm global root
+    const npmRoot = execSync("npm root -g", { encoding: "utf-8" }).trim();
+    if (npmRoot) {
+      npmGlobalRoot = join(npmRoot, "context8-mcp");
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  try {
+    // Try to find via which/where command
+    const whichCmd = process.platform === "win32" ? "where" : "which";
+    const result = execSync(`${whichCmd} context8-mcp`, { encoding: "utf-8" }).trim();
+    if (result) {
+      globalInstall = result.split("\n")[0]; // Take first result
+    }
+  } catch {
+    // Ignore errors - command might not be in PATH
+  }
+
+  return { currentExecutable, globalInstall, npmGlobalRoot };
+}
+
 /**
  * Context8 MCP Server
  * A local knowledge base for storing and retrieving error solutions with semantic search
@@ -899,7 +935,10 @@ main().catch((error) => {
 
 async function runCli(argv: string[]) {
   const program = new Command();
-  program.name("context8-mcp").description("CLI utilities for Context8 MCP");
+  program
+    .name("context8-mcp")
+    .description("CLI utilities for Context8 MCP")
+    .version(pkgJson.version, "-v, --version", "Display version number");
 
   program
     .command("list")
@@ -1049,6 +1088,43 @@ async function runCli(argv: string[]) {
     .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
     .option("--api-key <key>", "API key for remote server (overrides env/config)")
     .action(async (opts) => {
+      // Display installation paths
+      const paths = getInstallationPaths();
+      console.log("=== Installation Paths ===");
+      console.log(`Version: ${pkgJson.version}`);
+      console.log(`Current executable: ${paths.currentExecutable}`);
+      console.log();
+
+      // Show ready-to-use config snippets
+      if (paths.globalInstall) {
+        console.log("--- For MCP Clients (Recommended) ---");
+        console.log("JSON format (Cursor, VS Code, etc.):");
+        console.log('  "command": "context8-mcp",');
+        console.log('  "args": []');
+        console.log();
+        console.log("TOML format (OpenAI Codex):");
+        console.log('  command = "context8-mcp"');
+        console.log("  args = []");
+        console.log();
+      }
+
+      if (paths.npmGlobalRoot && existsSync(paths.npmGlobalRoot)) {
+        const distIndex = join(paths.npmGlobalRoot, "dist", "index.js");
+        if (existsSync(distIndex)) {
+          console.log("--- Alternative: Direct Node Path ---");
+          console.log("JSON format:");
+          console.log('  "command": "node",');
+          console.log(`  "args": ["${distIndex}"]`);
+          console.log();
+          console.log("TOML format:");
+          console.log('  command = "node"');
+          console.log(`  args = ["${distIndex}"]`);
+          console.log();
+        }
+      }
+
+      console.log("=== Mode & Connectivity ===");
+
       const remote = resolveRemoteConfig(opts.remoteUrl, opts.apiKey);
       if (remote) {
         try {
