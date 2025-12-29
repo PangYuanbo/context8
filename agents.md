@@ -210,3 +210,4 @@ tailwindcss + shadcn
 24. Context7 缓存改为动态加载 `better-sqlite3`，缺依赖时抛出友好提示；远端模式不注册该工具避免强依赖。
 25. CLI 遇到缺本地依赖时主动提示两条路径：`context8-mcp setup-local` 或配置远端 URL/API Key，不再仅抛栈。
 26. 远端计数失败时不再静默返回 0；primary 与 fallback 都失败则抛错，diagnose 直观标记 remote unreachable。
+27. npm 发布需要 2FA 或带 bypass 2fa 的 granular token；classic token 已被撤销，发布前必须更新认证方式。
