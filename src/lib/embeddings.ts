@@ -9,7 +9,15 @@ type EmbeddingExtractor = (
   options: { pooling: "mean"; normalize: boolean }
 ) => Promise<{ data: Float32Array }>;
 
-let pipelineFactory: (typeof import("@xenova/transformers"))["pipeline"] | null = null;
+type TransformersModule = {
+  pipeline: (
+    task: "feature-extraction",
+    model: string,
+    options?: { quantized?: boolean }
+  ) => Promise<EmbeddingExtractor>;
+};
+
+let pipelineFactory: TransformersModule["pipeline"] | null = null;
 let embeddingPipeline: EmbeddingExtractor | null = null;
 
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
@@ -22,8 +30,13 @@ async function initPipeline(): Promise<EmbeddingExtractor> {
   if (embeddingPipeline) return embeddingPipeline;
 
   if (!pipelineFactory) {
-    const transformers = await import("@xenova/transformers");
-    pipelineFactory = transformers.pipeline;
+    // Use eval to avoid TypeScript checking optional dependency at compile time
+    const transformers = (await eval('import("@xenova/transformers")')) as unknown;
+    const pipeline = (transformers as { pipeline?: unknown }).pipeline;
+    if (typeof pipeline !== "function") {
+      throw new Error("Transformers module did not expose a pipeline function");
+    }
+    pipelineFactory = pipeline as TransformersModule["pipeline"];
   }
 
   console.error("Loading embedding model (first time may take a moment)...");
