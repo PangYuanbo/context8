@@ -17,7 +17,6 @@ Context8 is a **local-first error solution vault** that helps you store, search,
 - 🚀 **Fast & Reliable**: Better-sqlite3 with WAL mode for safe multi-process access
 - 🛠️ **CLI + MCP**: Use standalone or integrate with AI coding assistants
 - 📦 **Version Tracking**: Store environment and dependency versions with each solution
-- 🔗 **Context7 Integration**: Cache and retrieve library documentation
 
 ## ❌ Without Context8
 
@@ -40,22 +39,59 @@ Context8 remembers everything for you:
 
 ## 🛠️ Installation (local stdio; cloud optional)
 
-### ⚡ Quick Start (Recommended)
+### ⚡ Quick Start
 
-The simplest way to get started with Context8 in remote mode:
+Choose the method that works best for you:
+
+#### Option 1: Using npx (Simplest - No Installation Required)
+
+Perfect for remote mode with cloud sync. Just configure with your API key:
+
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "npx",
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+> Get your API key at https://www.context8.org (requires email verification)
+>
+> The remote URL (`https://api.context8.org`) is set as default - no need to specify it!
+
+#### Option 2: Global Installation (Best for Local Mode)
+
+Install once, use everywhere with local database:
 
 1. **Install globally:**
    ```bash
    npm install -g context8-mcp
    ```
 
-2. **Configure remote access:**
+2. **Optional - Configure remote access:**
    ```bash
    context8-mcp remote-config --remote-url https://api.context8.org --api-key <your-api-key>
    ```
-   > Get your API key at https://www.context8.org (requires email verification)
 
 3. **Add to your MCP client:**
+
+   For **most MCP clients** (JSON format):
+   ```json
+   {
+     "mcpServers": {
+       "context8": {
+         "command": "context8-mcp",
+         "timeout": 30000
+       }
+     }
+   }
+   ```
 
    For **OpenAI Codex** (TOML format):
    ```toml
@@ -65,19 +101,9 @@ The simplest way to get started with Context8 in remote mode:
    startup_timeout_ms = 30000
    ```
 
-   For **other MCP clients** (JSON format):
-   ```json
-   {
-     "mcpServers": {
-       "context8": {
-         "command": "context8-mcp",
-         "args": []
-       }
-     }
-   }
-   ```
-
-That's it! No need to set environment variables in your MCP config—the remote URL and API key are stored locally in `~/.context8/config.json`.
+That's it!
+- **No remote config?** → Uses local database at `~/.context8/solutions.db`
+- **With remote config?** → Syncs with cloud automatically
 
 **Check version:**
 ```bash
@@ -132,18 +158,25 @@ The output includes ready-to-use config snippets for both JSON and TOML formats!
 > [!NOTE]
 > **Remote vs Local**
 >
-> - Remote: set `CONTEXT8_REMOTE_URL` + `CONTEXT8_REMOTE_API_KEY` (env or `context8-mcp remote-config`). This stays lightweight—no `better-sqlite3` / `@xenova/transformers` pulled.
-> - Local: leave those env vars unset; run `context8-mcp setup-local` once to install the optional deps, data lives at `~/.context8/`.
-> - Switch: to return from remote to local, unset the envs or run `context8-mcp remote-config --clear`; re-enable remote by re-adding the envs or `remote-config --remote-url ... --api-key ...`.
-> - Context7 (optional): set `CONTEXT7_API_KEY` if you want the Context7 docs tool while in local mode. The `context7-cached-docs` tool is disabled in remote mode.
+> - **Remote mode**: Set only `CONTEXT8_REMOTE_API_KEY` - the URL defaults to `https://api.context8.org`! This stays lightweight—no `better-sqlite3` / `@xenova/transformers` needed.
+> - **Local mode**: Leave API key unset; run `context8-mcp setup-local` once to install optional deps. Data lives at `~/.context8/`.
+> - **Switch modes**: Unset `CONTEXT8_REMOTE_API_KEY` to use local, or set it to use remote.
 >
-> Example env block (any MCP client):
+> Simplified remote config (any MCP client):
 > ```json
 > {
 >   "env": {
->     "CONTEXT8_REMOTE_URL": "https://api.context8.org",
->     "CONTEXT8_REMOTE_API_KEY": "<your-api-key>",
->     "CONTEXT7_API_KEY": "OPTIONAL_FOR_CONTEXT7"
+>     "CONTEXT8_REMOTE_API_KEY": "<your-api-key>"
+>   }
+> }
+> ```
+>
+> Or with custom remote server:
+> ```json
+> {
+>   "env": {
+>     "CONTEXT8_REMOTE_URL": "https://your-server.com",
+>     "CONTEXT8_REMOTE_API_KEY": "<your-api-key>"
 >   }
 > }
 > ```
@@ -181,24 +214,6 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 }
 ```
 
-#### With Context7 Integration
-
-If you want to use Context7's cached documentation feature:
-
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "npx",
-      "args": ["-y", "context8-mcp"],
-      "env": {
-        "CONTEXT7_API_KEY": "YOUR_CONTEXT7_API_KEY"
-      }
-    }
-  }
-}
-```
-
 #### With Remote Mode (cloud)
 ```json
 {
@@ -207,15 +222,15 @@ If you want to use Context7's cached documentation feature:
       "command": "npx",
       "args": ["-y", "context8-mcp"],
       "env": {
-        "CONTEXT8_REMOTE_URL": "https://api.context8.org",
         "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
       }
     }
   }
 }
 ```
-API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only.
-If you switch back to local, unset them or run `context8-mcp remote-config --clear`, then run `context8-mcp setup-local` when you need local embeddings.
+> **Note:** The remote URL defaults to `https://api.context8.org` - you only need to set `CONTEXT8_REMOTE_API_KEY`!
+>
+> API key must be created via https://www.context8.org (email-verified user). Omit the env block to run local-only.
 
 </details>
 
@@ -228,38 +243,25 @@ Run this command:
 claude mcp add context8 -- npx -y context8-mcp
 ```
 
-#### With Context7 Integration
-
-```sh
-claude mcp add context8 --env CONTEXT7_API_KEY=YOUR_API_KEY -- npx -y context8-mcp
-```
-
 #### With Remote Mode (cloud)
 
 ```sh
 claude mcp add context8 \
-  --env CONTEXT8_REMOTE_URL=https://api.context8.org \
   --env CONTEXT8_REMOTE_API_KEY=<your-api-key> \
   -- npx -y context8-mcp
 ```
 
-API key must be created via https://www.context8.org (email-verified user). Leave these env vars unset to run local-only; to return to local mode, unset or `remote-config --clear`, then run `context8-mcp setup-local` if you need local embeddings.
+> **Note:** The remote URL defaults to `https://api.context8.org` - you only need to set `CONTEXT8_REMOTE_API_KEY`!
+>
+> API key must be created via https://www.context8.org (email-verified user). Omit the env flags to run local-only.
 
 </details>
 
 <details>
 <summary><b>Install in Amp</b></summary>
 
-#### Basic Installation
-
 ```sh
 amp mcp add context8 npx -y context8-mcp
-```
-
-#### With Context7 Integration
-
-```sh
-amp mcp add context8 --env CONTEXT7_API_KEY=YOUR_API_KEY npx -y context8-mcp
 ```
 
 </details>
@@ -275,22 +277,6 @@ Add this to your Windsurf MCP config file:
     "context8": {
       "command": "npx",
       "args": ["-y", "context8-mcp"]
-    }
-  }
-}
-```
-
-#### With Context7 Integration
-
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "npx",
-      "args": ["-y", "context8-mcp"],
-      "env": {
-        "CONTEXT7_API_KEY": "YOUR_CONTEXT7_API_KEY"
-      }
     }
   }
 }
@@ -312,23 +298,6 @@ Add this to your VS Code MCP config file:
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "context8-mcp"]
-    }
-  }
-}
-```
-
-#### With Context7 Integration
-
-```json
-"mcp": {
-  "servers": {
-    "context8": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "context8-mcp"],
-      "env": {
-        "CONTEXT7_API_KEY": "YOUR_CONTEXT7_API_KEY"
-      }
     }
   }
 }
@@ -581,30 +550,6 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 args = ["-y", "context8-mcp"]
 command = "npx"
 startup_timeout_ms = 20_000
-```
-
-#### With Context7 Integration
-
-If you want Context7 docs (local mode only):
-
-```toml
-[mcp_servers.context8]
-args = ["-y", "context8-mcp"]
-command = "npx"
-startup_timeout_ms = 20_000
-env = { CONTEXT7_API_KEY = "YOUR_API_KEY" }
-```
-
-Or with global install:
-
-```toml
-[mcp_servers.context8]
-command = "context8-mcp"
-args = []
-startup_timeout_ms = 30000
-
-[mcp_servers.context8.env]
-CONTEXT7_API_KEY = "YOUR_API_KEY"
 ```
 
 </details>
@@ -1060,13 +1005,6 @@ Context8 MCP provides the following tools:
 - **`delete-solution`**: Delete a solution by ID
   - `id` (required): Solution ID to delete
 
-### Context7 Integration
-
-- **`context7-cached-docs`**: Fetch cached Context7 library documentation
-  - `versionedLibraryId` (required): Context7 versioned library ID (e.g., `/vercel/next.js/v15.1.8`)
-  - `topic` (optional): Specific topic to focus on
-  - Note: Requires `CONTEXT7_API_KEY` environment variable
-
 ## 💡 Usage Examples
 
 ### Save an Error Solution
@@ -1193,14 +1131,6 @@ TypeScript: 5.3.3
 Framework: Next.js 14.1.0
 ```
 
-### Use Context7 Integration
-
-For library-specific documentation, combine with Context7:
-
-```txt
-Get Next.js 15.1.8 routing documentation using context7-cached-docs
-```
-
 ## 🔧 Development
 
 ### Setup
@@ -1239,11 +1169,11 @@ Context8 MCP runs as a stdio MCP server when invoked without arguments. The foll
 
 ### Environment Variables
 
-- `CONTEXT7_API_KEY` – Context7 API key for the `context7-cached-docs` tool
-- `CONTEXT7_ENDPOINT` – Custom Context7 endpoint URL (optional, defaults to `https://mcp.context7.com/mcp`)
 - `CONTEXT8_DEFAULT_LIMIT` – Default search result limit (optional, defaults to 25)
-- `CONTEXT8_REMOTE_URL` – Remote Context8 server URL (optional, for remote mode)
-- `CONTEXT8_REMOTE_API_KEY` – API key for remote server (optional, for remote mode)
+- `CONTEXT8_REMOTE_URL` – Remote Context8 server URL (optional, defaults to `https://api.context8.org`)
+- `CONTEXT8_REMOTE_API_KEY` – API key for remote server (required for remote mode)
+
+**Simplified remote mode:** Just set `CONTEXT8_REMOTE_API_KEY` - the URL will default to the official server!
 
 You can also persist the remote URL/API key in `~/.context8/config.json` using `context8-mcp remote-config`. Environment variables override the saved config when both are set.
 
@@ -1256,17 +1186,12 @@ You can also persist the remote URL/API key in `~/.context8/config.json` using `
 - Network guardrails: per-request timeout defaults to 10s; override with `--timeout <ms>` (e.g., `--timeout 15000`).
 - Accurate total counts require backend support for `GET /solutions/count`; older servers will fall back to an approximate search-based count.
 - API keys must be created via the `/apikeys` route and belong to an email-verified user; use `X-API-Key: <plaintext>` in requests (search `query` must be non-empty or backend returns 422).
-- Example MCP env block (TOML style):
+- Simplified MCP env block (TOML style):
   ```toml
   [mcp_servers.context8.env]
-  CONTEXT8_REMOTE_URL = "https://api.context8.org"
   CONTEXT8_REMOTE_API_KEY = "<your-api-key>"
+  # CONTEXT8_REMOTE_URL defaults to "https://api.context8.org" - no need to set it!
   ```
-
-### Context7 cache (local-only)
-
-- `context7-cached-docs` is registered only in local mode; when a remote URL is configured, the tool is not available and no cache writes occur.
-- Always supply a versioned library id (e.g., `/vercel/next.js/v15.1.8`). If you need Context7 docs while in remote mode, disable remote or run a local instance.
 
 ## 🚨 Troubleshooting
 
@@ -1345,20 +1270,8 @@ Try using `bunx` instead of `npx`:
 
 </details>
 
-<details>
-<summary><b>Context7 Integration Not Working</b></summary>
-
-Make sure:
-
-1. `CONTEXT7_API_KEY` environment variable is set
-2. You're using versioned library IDs (e.g., `/vercel/next.js/v15.1.8`)
-3. The Context7 API is accessible from your network
-
-</details>
-
 ## 🔗 Related Projects
 
-- [Context7 MCP](https://github.com/upstash/context7) - Up-to-date library documentation for AI coding assistants
 - [Model Context Protocol](https://modelcontextprotocol.io/) - Open standard for AI-application integration
 
 ## 📄 License
