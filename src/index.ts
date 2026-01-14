@@ -131,10 +131,12 @@ function isGlobalCliInstall(paths: {
 }
 
 function buildInstallCommand(pm: string, pkgs: string[], globalInstall: boolean): string {
-  if (pm === "pnpm") return globalInstall ? `pnpm add -g ${pkgs.join(" ")}` : `pnpm add ${pkgs.join(" ")}`;
+  if (pm === "pnpm")
+    return globalInstall ? `pnpm add -g ${pkgs.join(" ")}` : `pnpm add ${pkgs.join(" ")}`;
   if (pm === "yarn")
     return globalInstall ? `yarn global add ${pkgs.join(" ")}` : `yarn add ${pkgs.join(" ")}`;
-  if (pm === "bun") return globalInstall ? `bun add -g ${pkgs.join(" ")}` : `bun add ${pkgs.join(" ")}`;
+  if (pm === "bun")
+    return globalInstall ? `bun add -g ${pkgs.join(" ")}` : `bun add ${pkgs.join(" ")}`;
   return globalInstall ? `npm install -g ${pkgs.join(" ")}` : `npm install ${pkgs.join(" ")}`;
 }
 
@@ -935,7 +937,9 @@ async function runCli(argv: string[]) {
         const resolvedRemote = resolveRemoteConfig();
         const results = resolvedRemote
           ? await remoteSearchSolutions(resolvedRemote, query, opts.limit, { mode: opts.mode })
-          : await (await loadLocalDbModule()).searchSolutions(query, opts.limit, { mode: opts.mode });
+          : await (
+              await loadLocalDbModule()
+            ).searchSolutions(query, opts.limit, { mode: opts.mode });
         if (results.length === 0) {
           console.log("No results.");
           return;
@@ -1040,7 +1044,9 @@ async function runCli(argv: string[]) {
 
   program
     .command("diagnose")
-    .description("Check whether Context8 is running in remote or local mode and validate connectivity")
+    .description(
+      "Check whether Context8 is running in remote or local mode and validate connectivity"
+    )
     .option("--remote-url <url>", "Remote server base URL (overrides env/config)")
     .option("--api-key <key>", "API key for remote server (overrides env/config)")
     .action(async (opts) => {

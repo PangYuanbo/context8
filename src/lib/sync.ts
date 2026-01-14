@@ -64,7 +64,8 @@ export function resolveRemoteConfig(
 ): RemoteConfig | null {
   const savedConfig = loadConfig();
   const DEFAULT_REMOTE_URL = "https://api.context8.org";
-  const baseUrl = overrideUrl || process.env.CONTEXT8_REMOTE_URL || savedConfig.remoteUrl || DEFAULT_REMOTE_URL;
+  const baseUrl =
+    overrideUrl || process.env.CONTEXT8_REMOTE_URL || savedConfig.remoteUrl || DEFAULT_REMOTE_URL;
   const apiKey =
     overrideApiKey || process.env.CONTEXT8_REMOTE_API_KEY || savedConfig.apiKey || undefined;
 

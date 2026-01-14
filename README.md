@@ -49,11 +49,13 @@ Perfect for remote mode with cloud sync. Just configure with your API key:
 Install once, use everywhere with local database:
 
 1. **Install globally:**
+
    ```bash
    npm install -g context8-mcp
    ```
 
 2. **Optional - Configure remote access:**
+
    ```bash
    context8-mcp remote-config --remote-url https://api.context8.org --api-key <your-api-key>
    ```
@@ -61,6 +63,7 @@ Install once, use everywhere with local database:
 3. **Add to your MCP client:**
 
    For **most MCP clients** (JSON format):
+
    ```json
    {
      "mcpServers": {
@@ -73,6 +76,7 @@ Install once, use everywhere with local database:
    ```
 
    For **OpenAI Codex** (TOML format):
+
    ```toml
    [mcp_servers.context8]
    command = "context8-mcp"
@@ -81,20 +85,24 @@ Install once, use everywhere with local database:
    ```
 
 That's it!
+
 - **Remote mode (recommended)** → Uses the cloud and community features
 - **Local mode (optional)** → Uses `~/.context8/solutions.db`
 
 **Check version:**
+
 ```bash
 context8-mcp --version
 ```
 
 **Verify connection and get config paths:**
+
 ```bash
 context8-mcp diagnose
 ```
 
 This command will show:
+
 - ✅ Your installation paths (ready to copy-paste into MCP configs)
 - ✅ Package version
 - ✅ Current mode (remote/local) and connectivity status
@@ -142,6 +150,7 @@ The output includes ready-to-use config snippets for both JSON and TOML formats!
 > - **Switch modes**: Unset `CONTEXT8_REMOTE_API_KEY` to use local, or set it to use remote.
 >
 > Simplified remote config (any MCP client):
+>
 > ```json
 > {
 >   "env": {
@@ -151,6 +160,7 @@ The output includes ready-to-use config snippets for both JSON and TOML formats!
 > ```
 >
 > Or with custom remote server:
+>
 > ```json
 > {
 >   "env": {
@@ -183,6 +193,7 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=context8&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvbnRleHQ4LW1jcCJdfQ%3D%3D)
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -198,6 +209,7 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -208,6 +220,7 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
   }
 }
 ```
+
 > **Note:** The remote URL defaults to `https://api.context8.org` - you only need to set `CONTEXT8_REMOTE_API_KEY`!
 >
 > API key must be created via https://www.context8.org (email-verified user). Omit the env block to run local-only.
@@ -220,11 +233,13 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 Run this command:
 
 #### Option 2: global install (local mode)
+
 ```sh
 claude mcp add context8 -- context8-mcp
 ```
 
 #### Option 1: npx (remote mode)
+
 ```sh
 claude mcp add context8 \
   --env CONTEXT8_REMOTE_API_KEY=<your-api-key> \
@@ -252,6 +267,7 @@ amp mcp add context8 npx -y context8-mcp
 Add this to your Windsurf MCP config file:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -267,6 +283,7 @@ Add this to your Windsurf MCP config file:
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -288,6 +305,7 @@ Add this to your Windsurf MCP config file:
 Add this to your VS Code MCP config file:
 
 #### Option 1: npx (remote mode)
+
 ```json
 "mcp": {
   "servers": {
@@ -304,6 +322,7 @@ Add this to your VS Code MCP config file:
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 "mcp": {
   "servers": {
@@ -329,6 +348,7 @@ Add this to your VS Code MCP config file:
 5. Add context8 to `mcpServers`:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -344,6 +364,7 @@ Add this to your VS Code MCP config file:
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -363,6 +384,7 @@ Add this to your VS Code MCP config file:
 Add this to your Zed `settings.json`:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "context_servers": {
@@ -379,6 +401,7 @@ Add this to your Zed `settings.json`:
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "context_servers": {
@@ -418,6 +441,7 @@ Add this to your Zed `settings.json`:
 Add to your `settings.json`:
 
 #### Option 1: npx (remote mode)
+
 ```json
 "augment.advanced": {
   "mcpServers": [
@@ -434,6 +458,7 @@ Add to your `settings.json`:
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 "augment.advanced": {
   "mcpServers": [
@@ -550,6 +575,7 @@ Open `~/.qwen/settings.json` and add:
 Open Claude Desktop developer settings and edit your `claude_desktop_config.json` file:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -565,6 +591,7 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -601,17 +628,21 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 ### Option 2: global install (local mode)
 
 1. **Install globally:**
+
    ```bash
    npm install -g context8-mcp
    ```
 
 2. **Get your config paths:**
+
    ```bash
    context8-mcp diagnose
    ```
+
    This will show ready-to-copy config snippets for both recommended and alternative setups!
 
 3. **Add to your Codex config** (copy from diagnose output):
+
    ```toml
    [mcp_servers.context8]
    command = "context8-mcp"
@@ -645,6 +676,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 4. Add this configuration:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -660,6 +692,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -683,6 +716,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 3. Paste this configuration:
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -700,6 +734,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -721,6 +756,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 <summary><b>Install in Trae</b></summary>
 
 #### Option 1: npx (remote mode)
+
 ```json
 {
   "mcpServers": {
@@ -736,6 +772,7 @@ CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 ```
 
 #### Option 2: global install (local mode)
+
 ```json
 {
   "mcpServers": {
@@ -1336,11 +1373,13 @@ context8-mcp diagnose
 ```
 
 This will show:
+
 1. **Installation paths** - The exact paths to use in your config
 2. **Ready-to-use config snippets** - Copy-paste snippets for both JSON and TOML formats
 3. **Recommended vs Alternative configs** - Choose the one that works for your setup
 
 **Common solutions:**
+
 - ✅ Use `"command": "context8-mcp"` with `"args": []` (recommended if globally installed)
 - ✅ Use `"command": "node"` with the full path from diagnose output (alternative)
 - ✅ Make sure the path shown in diagnose exists and is accessible

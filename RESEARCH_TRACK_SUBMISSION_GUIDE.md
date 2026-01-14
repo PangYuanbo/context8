@@ -1,6 +1,7 @@
 # Research Track Submission Guide for Context8
 
 ## Project Overview
+
 **Context8** is a local-first error solution vault MCP server that helps developers store, search, and retrieve error solutions using hybrid semantic + keyword search.
 
 ## Submission Requirement Clarification
@@ -8,11 +9,14 @@
 Since you are in the **Research Track**, you need to determine:
 
 ### Option 1: Are you submitting a research project about agent tooling/infrastructure?
+
 If your research is about **how MCP tools like Context8 enable better agent performance**, you may need to:
+
 - Write a research report (1-2 pages) explaining your research contribution
 - Submit it via the Green Agent form (Q10 mentions research track can submit a PDF report)
 
 ### Option 2: Did you build white/green agents that USE Context8?
+
 If you built agents that utilize Context8 as a tool, you would submit those agents separately.
 
 ---
@@ -20,6 +24,7 @@ If you built agents that utilize Context8 as a tool, you would submit those agen
 ## WHITE AGENT SUBMISSION FORM ANALYSIS
 
 ### ✅ MUST ANSWER (All tracks including research):
+
 - **Q1: Team Name** - Your team identifier
 - **Q2: Team Member Names and Email Addresses** - Include mentor name for research track
 - **Q3: Units** - Credit units (2, 3, or 4)
@@ -27,6 +32,7 @@ If you built agents that utilize Context8 as a tool, you would submit those agen
 - **Q5: Task** - SELECT "Research Track"
 
 ### ✅ IF YOU HAVE A WHITE AGENT:
+
 - **Q6: Abstract** - Describe the white agent's task
 - **Q7: White Agent Implementation Details** (6 points total)
   - Q7.1: Agent Framework Design (3 points)
@@ -45,6 +51,7 @@ If you built agents that utilize Context8 as a tool, you would submit those agen
 - **Q13: Division of Labor** (1 point)
 
 ### ❌ NOT APPLICABLE if research is about tooling/infrastructure:
+
 If your research is about MCP tooling (like Context8) rather than building agents, most of Q6-Q13 may not apply.
 
 ---
@@ -52,6 +59,7 @@ If your research is about MCP tooling (like Context8) rather than building agent
 ## GREEN AGENT SUBMISSION FORM ANALYSIS
 
 ### ✅ MUST ANSWER (All tracks including research):
+
 - **Q1: Team Name**
 - **Q2: Team Member Names and Email Addresses** - Include mentor name for research track
 - **Q3: Units** - Credit units (1, 2, 3, or 4)
@@ -59,6 +67,7 @@ If your research is about MCP tooling (like Context8) rather than building agent
 - **Q5: Task** - SELECT "Research Track" (option 48)
 
 ### ✅ IF YOU HAVE A GREEN AGENT:
+
 - **Q6: Abstract** (2 points)
 - **Q7: Implementation Details** (9 points total)
   - Q7.1: Environment Design (3 points)
@@ -90,14 +99,17 @@ Since Context8 is **MCP tooling/infrastructure**, I recommend:
 ### Submit via GREEN AGENT FORM as Research Track:
 
 Your research contribution appears to be:
+
 > **"A local-first MCP server for error solution management that enables agents to learn from past errors through hybrid semantic + keyword search"**
 
 #### Questions to Answer:
 
 **Basic Info:**
+
 - Q1-Q5: Team details + select "Research Track"
 
 **Research Content (via Q10 PDF report):**
+
 - **Q10: Submit a research report PDF covering:**
   1. **Research Goal**: How Context8 addresses the gap in agent tooling for error management
   2. **Novelty**: Local-first hybrid search for error solutions, privacy-preserving design
@@ -113,6 +125,7 @@ Your research contribution appears to be:
      - Integration with multiple AI coding assistants
 
 **Additional Documentation:**
+
 - Q6: Abstract (2 points) - Brief overview of Context8's purpose
 - Q8.1-Q8.3: Research-specific quality metrics:
   - Novelty of approach
@@ -121,6 +134,7 @@ Your research contribution appears to be:
 - Q13: Division of labor
 
 **May Skip (if no evaluator agent built):**
+
 - ❌ Q7 (Environment/Evaluation/Data Design) - only if you built an evaluator
 - ❌ Q8.4-Q8.7 - evaluator-specific metrics
 - ❌ Q9 - demo video (unless you want to show Context8 in action)
