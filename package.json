@@ -27,6 +27,9 @@
   "author": "aaron",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "context8-mcp": "dist/index.js"
   },
@@ -40,7 +43,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
     "commander": "^14.0.0",
-    "zod": "^4.1.13"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

@@ -1,6 +1,16 @@
 import { ErrorSolution, SolutionSearchResult, SearchOptions } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 10000;
+const MIN_NODE_VERSION = "18";
+
+function requireFetch(): typeof fetch {
+  if (typeof fetch !== "function") {
+    throw new Error(
+      `Global fetch is unavailable. Remote mode requires Node.js >= ${MIN_NODE_VERSION}.`
+    );
+  }
+  return fetch;
+}
 
 function resolveTimeout(): number {
   const raw = process.env.CONTEXT8_REQUEST_TIMEOUT;
@@ -54,8 +64,9 @@ export async function remoteSaveSolution(
   config: RemoteConfig,
   solution: Omit<ErrorSolution, "id" | "createdAt">
 ): Promise<ErrorSolution> {
+  const fetchImpl = requireFetch();
   const res = await withTimeout(
-    fetch(`${config.baseUrl}/solutions`, {
+    fetchImpl(`${config.baseUrl}/solutions`, {
       method: "POST",
       headers: headers(config.apiKey),
       body: JSON.stringify(solution),
@@ -71,8 +82,9 @@ export async function remoteGetSolutionById(
   config: RemoteConfig,
   id: string
 ): Promise<ErrorSolution | null> {
+  const fetchImpl = requireFetch();
   const res = await withTimeout(
-    fetch(`${config.baseUrl}/solutions/${id}`, {
+    fetchImpl(`${config.baseUrl}/solutions/${id}`, {
       headers: headers(config.apiKey),
     })
   );
@@ -99,13 +111,14 @@ export async function remoteSearchSolutions(
   limit = 25,
   options: SearchOptions = {}
 ): Promise<SolutionSearchResult[]> {
+  const fetchImpl = requireFetch();
   const payload: Record<string, unknown> = { query, limit, offset: 0 };
   if (options.mode) {
     payload.mode = options.mode;
   }
 
   const res = await withTimeout(
-    fetch(`${config.baseUrl}/search`, {
+    fetchImpl(`${config.baseUrl}/search`, {
       method: "POST",
       headers: headers(config.apiKey),
       body: JSON.stringify(payload),
@@ -115,7 +128,7 @@ export async function remoteSearchSolutions(
   // Backward compatibility: some servers may not accept mode; retry without it on 400/422.
   if (!res.ok && options.mode && (res.status === 400 || res.status === 422)) {
     const retry = await withTimeout(
-      fetch(`${config.baseUrl}/search`, {
+      fetchImpl(`${config.baseUrl}/search`, {
         method: "POST",
         headers: headers(config.apiKey),
         body: JSON.stringify({ query, limit, offset: 0 }),
@@ -132,9 +145,10 @@ export async function remoteSearchSolutions(
 }
 
 async function legacyCountViaSearch(config: RemoteConfig): Promise<number> {
+  const fetchImpl = requireFetch();
   // Approximate count via keyword search; may be off but avoids throwing.
   const res = await withTimeout(
-    fetch(`${config.baseUrl}/search`, {
+    fetchImpl(`${config.baseUrl}/search`, {
       method: "POST",
       headers: headers(config.apiKey),
       body: JSON.stringify({ query: " ", limit: 0, offset: 0 }),
@@ -157,8 +171,9 @@ export async function remoteGetSolutionCount(config: RemoteConfig): Promise<numb
   };
 
   try {
+    const fetchImpl = requireFetch();
     const res = await withTimeout(
-      fetch(`${config.baseUrl}/solutions/count`, {
+      fetchImpl(`${config.baseUrl}/solutions/count`, {
         headers: headers(config.apiKey),
       })
     );
@@ -185,8 +200,9 @@ export async function remoteGetSolutionCount(config: RemoteConfig): Promise<numb
 }
 
 export async function remoteDeleteSolution(config: RemoteConfig, id: string): Promise<boolean> {
+  const fetchImpl = requireFetch();
   const res = await withTimeout(
-    fetch(`${config.baseUrl}/solutions/${id}`, {
+    fetchImpl(`${config.baseUrl}/solutions/${id}`, {
       method: "DELETE",
       headers: headers(config.apiKey),
     })
