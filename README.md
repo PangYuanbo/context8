@@ -203,18 +203,7 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=context8&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvbnRleHQ4LW1jcCJdfQ%3D%3D)
 
-```json
-{
-  "mcpServers": {
-    "context8": {
-      "command": "npx",
-      "args": ["-y", "context8-mcp"]
-    }
-  }
-}
-```
-
-#### With Remote Mode (cloud)
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
@@ -224,6 +213,18 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
       "env": {
         "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
       }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
@@ -239,12 +240,12 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file. Yo
 
 Run this command:
 
+#### Option 2: global install (local mode)
 ```sh
-claude mcp add context8 -- npx -y context8-mcp
+claude mcp add context8 -- context8-mcp
 ```
 
-#### With Remote Mode (cloud)
-
+#### Option 1: npx (remote mode)
 ```sh
 claude mcp add context8 \
   --env CONTEXT8_REMOTE_API_KEY=<your-api-key> \
@@ -271,12 +272,28 @@ amp mcp add context8 npx -y context8-mcp
 
 Add this to your Windsurf MCP config file:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "context8": {
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
@@ -291,13 +308,31 @@ Add this to your Windsurf MCP config file:
 
 Add this to your VS Code MCP config file:
 
+#### Option 1: npx (remote mode)
 ```json
 "mcp": {
   "servers": {
     "context8": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+"mcp": {
+  "servers": {
+    "context8": {
+      "type": "stdio",
+      "command": "context8-mcp",
+      "args": [],
+      "startupTimeout": 30000
     }
   }
 }
@@ -314,12 +349,28 @@ Add this to your VS Code MCP config file:
 4. Click the **Edit Configuration** button.
 5. Add context8 to `mcpServers`:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "context8": {
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
@@ -332,13 +383,30 @@ Add this to your VS Code MCP config file:
 
 Add this to your Zed `settings.json`:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "context_servers": {
     "Context8": {
       "source": "custom",
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "context_servers": {
+    "Context8": {
+      "source": "custom",
+      "command": "context8-mcp",
+      "args": []
     }
   }
 }
@@ -361,20 +429,40 @@ Add this to your Zed `settings.json`:
    npx -y context8-mcp
    ```
 
-6. Name the MCP: **Context8**.
-7. Click the **Add** button.
+6. Add environment variables:
+   - `CONTEXT8_REMOTE_API_KEY=YOUR_API_KEY`
+7. Name the MCP: **Context8**.
+8. Click the **Add** button.
 
 ### Manual Configuration
 
 Add to your `settings.json`:
 
+#### Option 1: npx (remote mode)
 ```json
 "augment.advanced": {
   "mcpServers": [
     {
       "name": "context8",
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  ]
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+"augment.advanced": {
+  "mcpServers": [
+    {
+      "name": "context8",
+      "command": "context8-mcp",
+      "args": [],
+      "timeout": 30000
     }
   ]
 }
@@ -482,12 +570,28 @@ Open `~/.qwen/settings.json` and add:
 
 Open Claude Desktop developer settings and edit your `claude_desktop_config.json` file:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "context8": {
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
@@ -515,25 +619,20 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 <details>
 <summary><b>Install in OpenAI Codex</b></summary>
 
-### Recommended: Global Install + Remote Config
+### Option 2: global install (local mode)
 
 1. **Install globally:**
    ```bash
    npm install -g context8-mcp
    ```
 
-2. **Configure remote (optional):**
-   ```bash
-   context8-mcp remote-config --remote-url https://api.context8.org --api-key <your-api-key>
-   ```
-
-3. **Get your config paths:**
+2. **Get your config paths:**
    ```bash
    context8-mcp diagnose
    ```
    This will show ready-to-copy config snippets for both recommended and alternative setups!
 
-4. **Add to your Codex config** (copy from diagnose output):
+3. **Add to your Codex config** (copy from diagnose output):
    ```toml
    [mcp_servers.context8]
    command = "context8-mcp"
@@ -541,16 +640,20 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
    startup_timeout_ms = 30000
    ```
 
-   This is the cleanest approach—no environment variables needed in the config file!
+   This is the cleanest approach—no environment variables needed in the config file.
 
-### Alternative: Using npx
+### Option 1: npx (remote mode)
 
 ```toml
 [mcp_servers.context8]
 args = ["-y", "context8-mcp"]
 command = "npx"
 startup_timeout_ms = 20_000
+[mcp_servers.context8.env]
+CONTEXT8_REMOTE_API_KEY = "YOUR_API_KEY"
 ```
+
+> **Note:** The remote URL defaults to `https://api.context8.org` - you only need to set `CONTEXT8_REMOTE_API_KEY`!
 
 </details>
 
@@ -562,12 +665,28 @@ startup_timeout_ms = 20_000
 3. Select **As JSON** option.
 4. Add this configuration:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "context8": {
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
@@ -584,13 +703,30 @@ startup_timeout_ms = 20_000
 2. Click `+ Add`.
 3. Paste this configuration:
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "Context8": {
       "command": "npx",
       "args": ["-y", "context8-mcp"],
-      "env": {},
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "Context8": {
+      "command": "context8-mcp",
+      "args": [],
       "disabled": false,
       "autoApprove": []
     }
@@ -605,12 +741,28 @@ startup_timeout_ms = 20_000
 <details>
 <summary><b>Install in Trae</b></summary>
 
+#### Option 1: npx (remote mode)
 ```json
 {
   "mcpServers": {
     "context8": {
       "command": "npx",
-      "args": ["-y", "context8-mcp"]
+      "args": ["-y", "context8-mcp"],
+      "env": {
+        "CONTEXT8_REMOTE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: global install (local mode)
+```json
+{
+  "mcpServers": {
+    "context8": {
+      "command": "context8-mcp",
+      "timeout": 30000
     }
   }
 }
