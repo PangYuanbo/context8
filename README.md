@@ -1,27 +1,28 @@
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=context8&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvbnRleHQ4LW1jcCJdfQ%3D%3D) [<img alt="Install in VS Code (npx)" src="https://img.shields.io/badge/Install%20in%20VS%20Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%7B%22name%22%3A%22context8%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22context8-mcp%22%5D%7D)
 
-# Context8 MCP - Local Error Solution Vault
+# Context8 MCP - Cloud Error Solution Vault
 
 [![NPM Version](https://img.shields.io/npm/v/context8-mcp?color=red)](https://www.npmjs.com/package/context8-mcp) [![MIT licensed](https://img.shields.io/npm/l/context8-mcp)](./LICENSE)
 
 ## 🎯 What is Context8?
 
-Context8 is a **local-first error solution vault** that stores fixes with context and makes them searchable via semantic + keyword search. All data stays in SQLite.
+Context8 is a **cloud-first error solution vault** for Vibe Coding agents: store fixes with context, search fast, and share solutions with the community. Think of it as a StackOverflow for AI-assisted coding. Local storage remains optional.
 
 ### Key Features
 
-- 🔒 **Local-first storage** in `~/.context8/solutions.db`
-- 🔍 **Hybrid search** (MiniLM + BM25-style matching)
+- ☁️ **Cloud-first sync** with optional local fallback
+- 🔍 **Hybrid search** (semantic + keyword matching)
 - 🛠️ **CLI + MCP** integration for coding assistants
+- 🤝 **Community-ready** sharing via public solutions
 - 📦 **Version tracking** for environment and dependencies
 
-## 🛠️ Installation (local stdio; cloud optional)
+## 🛠️ Installation (cloud-first; local optional)
 
 ### ⚡ Quick Start
 
 Choose the method that works best for you:
 
-#### Option 1: Using npx (Simplest - No Installation Required)
+#### Option 1: Using npx (Simplest - Remote Mode)
 
 Perfect for remote mode with cloud sync. Just configure with your API key:
 
@@ -43,7 +44,7 @@ Perfect for remote mode with cloud sync. Just configure with your API key:
 >
 > The remote URL (`https://api.context8.org`) is set as default - no need to specify it!
 
-#### Option 2: Global Installation (Best for Local Mode)
+#### Option 2: Global Installation (Local Mode)
 
 Install once, use everywhere with local database:
 
@@ -80,8 +81,8 @@ Install once, use everywhere with local database:
    ```
 
 That's it!
-- **No remote config?** → Uses local database at `~/.context8/solutions.db`
-- **With remote config?** → Syncs with cloud automatically
+- **Remote mode (recommended)** → Uses the cloud and community features
+- **Local mode (optional)** → Uses `~/.context8/solutions.db`
 
 **Check version:**
 ```bash
@@ -114,7 +115,7 @@ The output includes ready-to-use config snippets for both JSON and TOML formats!
   - Remote-only mode can skip these; the MCP lazily loads them only when you run local mode.
 
 > [!IMPORTANT]
-> **Stdio MCP only; cloud optional**
+> **Stdio MCP only; cloud-first**
 >
 > - ✅ Install via `npx`, `bunx`, or `npm install -g`
 > - ✅ Stdio transport (no HTTP server mode)
