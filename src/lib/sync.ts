@@ -63,11 +63,15 @@ export function resolveRemoteConfig(
   overrideApiKey?: string
 ): RemoteConfig | null {
   const savedConfig = loadConfig();
-  const baseUrl = overrideUrl || process.env.CONTEXT8_REMOTE_URL || savedConfig.remoteUrl;
+  const DEFAULT_REMOTE_URL = "https://api.context8.org";
+  const baseUrl = overrideUrl || process.env.CONTEXT8_REMOTE_URL || savedConfig.remoteUrl || DEFAULT_REMOTE_URL;
   const apiKey =
     overrideApiKey || process.env.CONTEXT8_REMOTE_API_KEY || savedConfig.apiKey || undefined;
 
-  if (!baseUrl) return null;
+  // If using default URL but no API key, fall back to local mode
+  if (baseUrl === DEFAULT_REMOTE_URL && !apiKey) {
+    return null;
+  }
 
   return apiKey ? { baseUrl, apiKey } : { baseUrl };
 }
