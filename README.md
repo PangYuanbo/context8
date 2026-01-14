@@ -6,34 +6,14 @@
 
 ## 🎯 What is Context8?
 
-Context8 is a **local-first error solution vault** that helps you store, search, and retrieve error solutions with their context. It uses semantic search + keyword matching to find relevant solutions fast, with all data stored locally in SQLite.
+Context8 is a **local-first error solution vault** that stores fixes with context and makes them searchable via semantic + keyword search. All data stays in SQLite.
 
 ### Key Features
 
-- 🔒 **100% Local**: All data stored in `~/.context8/solutions.db` using SQLite
-- 🔍 **Hybrid Search**: Semantic search (MiniLM 384d) + BM25-style keyword matching
-- 🚀 **Fast & Reliable**: Better-sqlite3 with WAL mode for safe multi-process access
-- 🛠️ **CLI + MCP**: Use standalone or integrate with AI coding assistants
-- 📦 **Version Tracking**: Store environment and dependency versions with each solution
-
-## ❌ Without Context8
-
-When you encounter errors while coding:
-
-- ❌ Forgot how you solved similar errors before
-- ❌ Can't remember which library version the fix applies to
-- ❌ Lost track of root causes and solutions
-- ❌ Repeatedly search the same issues online
-
-## ✅ With Context8
-
-Context8 remembers everything for you:
-
-- ✅ **Save Solutions**: Store errors, root causes, fixes, and environment details
-- ✅ **Smart Search**: Find relevant solutions using semantic + keyword search
-- ✅ **Version Aware**: Track which versions the solution applies to
-- ✅ **Local First**: Your data stays on your machine
-- ✅ **AI Integration**: Works seamlessly with AI coding assistants via MCP
+- 🔒 **Local-first storage** in `~/.context8/solutions.db`
+- 🔍 **Hybrid search** (MiniLM + BM25-style matching)
+- 🛠️ **CLI + MCP** integration for coding assistants
+- 📦 **Version tracking** for environment and dependencies
 
 ## 🛠️ Installation (local stdio; cloud optional)
 
