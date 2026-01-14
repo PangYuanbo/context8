@@ -4,15 +4,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { execSync } from "child_process";
 import { Command } from "commander";
 import { ErrorType } from "./lib/types.js";
-import {
-  getCachedContext7Doc,
-  setCachedContext7Doc,
-  getContext7CachePath,
-} from "./lib/context7Cache.js";
 import {
   remoteSaveSolution,
   remoteSearchSolutions,
@@ -102,6 +97,22 @@ function getInstallationPaths(): {
   }
 
   return { currentExecutable, globalInstall, npmGlobalRoot };
+}
+
+function isGlobalCliInstall(paths: { currentExecutable: string; npmGlobalRoot: string | null }): boolean {
+  if (!paths.npmGlobalRoot) return false;
+  const normalizedRoot = resolve(paths.npmGlobalRoot);
+  const normalizedExec = resolve(paths.currentExecutable);
+  const rootWithSep = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+  return normalizedExec === normalizedRoot || normalizedExec.startsWith(rootWithSep);
+}
+
+function buildInstallCommand(pm: string, pkgs: string[], globalInstall: boolean): string {
+  if (pm === "pnpm") return globalInstall ? `pnpm add -g ${pkgs.join(" ")}` : `pnpm add ${pkgs.join(" ")}`;
+  if (pm === "yarn")
+    return globalInstall ? `yarn global add ${pkgs.join(" ")}` : `yarn add ${pkgs.join(" ")}`;
+  if (pm === "bun") return globalInstall ? `bun add -g ${pkgs.join(" ")}` : `bun add ${pkgs.join(" ")}`;
+  return globalInstall ? `npm install -g ${pkgs.join(" ")}` : `npm install ${pkgs.join(" ")}`;
 }
 
 /**
@@ -199,7 +210,7 @@ function createServerInstance() {
     },
     {
       instructions:
-        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities. When using Context7 passthrough (context7-cached-docs), ALWAYS include a versioned library id (format: /org/project/version).",
+        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities.",
     }
   );
 
@@ -288,7 +299,7 @@ Examples from your current vault (keep future entries equally abstract):
           .string()
           .optional()
           .describe(
-            "Optional: Context7 library id (must include version, e.g., /vercel/next.js/v15.1.8) for CLI-related errors; auto-fetches help into the record."
+            "Optional: Library id (must include version, e.g., /vercel/next.js/v15.1.8) for CLI-related errors."
           ),
         codeChanges: z
           .string()
@@ -800,84 +811,6 @@ The deletion also removes the sparse index and stats so the DB stays consistent.
     }
   );
 
-  // Register Context7 cached docs fetcher (local mode only; remote mode disables to avoid optional deps)
-  if (!remoteConfig) {
-    server.registerTool(
-      "context7-cached-docs",
-      {
-        title: "Context7 Cached Docs",
-        description: `Fetch Context7 library docs with local caching. Checks the local cache first; on miss, calls Context7 and stores the result for reuse.
-
-Requirements:
-- Always provide a VERSIONED library id: format '/org/project/version' (avoid bare '/org/project').
-- Recommended: Context7 API key via env CONTEXT7_API_KEY or input.
-
-Examples:
-- /vercel/next.js/v15.1.8 with topic='routing', page=1
-- /facebook/react/v19.0.0 with topic='hooks', page=1
-- /supabase/supabase-js/v2.45.4 with topic='auth', page=2`,
-        inputSchema: {
-          context7ApiKey: z.string().optional().describe("Context7 API key (optional if set in env)"),
-          libraryId: z.string().describe("Context7-compatible library ID (e.g., /vercel/next.js)"),
-          topic: z.string().optional().describe("Docs topic (optional)"),
-          page: z.number().int().min(1).max(10).optional().describe("Page number (default 1)"),
-          forceRefresh: z.boolean().optional().describe("If true, bypass cache and refresh"),
-        },
-      },
-      async ({ context7ApiKey, libraryId, topic, page = 1, forceRefresh = false }) => {
-        const apiKey = context7ApiKey || process.env.CONTEXT7_API_KEY;
-
-        try {
-          if (!forceRefresh) {
-            const cached = await getCachedContext7Doc(libraryId, topic, page);
-            if (cached) {
-              return {
-                content: [
-                  { type: "text", text: cached },
-                  {
-                    type: "text",
-                    text: `(served from cache at ${getContext7CachePath()})`,
-                  },
-                ],
-              };
-            }
-          }
-
-          const fetched = await callContext7Tool(
-            "get-library-docs",
-            {
-              context7CompatibleLibraryID: libraryId,
-              topic,
-              page,
-            },
-            apiKey
-          );
-
-          await setCachedContext7Doc(libraryId, topic, page, fetched);
-
-          return {
-            content: [
-              { type: "text", text: fetched },
-              {
-                type: "text",
-                text: `(cached at ${getContext7CachePath()})`,
-              },
-            ],
-          };
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Context7 fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-              },
-            ],
-          };
-        }
-      }
-    );
-  }
-
   return server;
 }
 
@@ -1165,16 +1098,14 @@ async function runCli(argv: string[]) {
     .action(async (opts) => {
       const pm = typeof opts.packageManager === "string" ? opts.packageManager : "npm";
       const pkgs = ["better-sqlite3", "@xenova/transformers"];
-      const cmd =
-        pm === "pnpm"
-          ? `pnpm add ${pkgs.join(" ")}`
-          : pm === "yarn"
-            ? `yarn add ${pkgs.join(" ")}`
-            : pm === "bun"
-              ? `bun add ${pkgs.join(" ")}`
-              : `npm install ${pkgs.join(" ")}`;
+      const paths = getInstallationPaths();
+      const globalInstall = isGlobalCliInstall(paths);
+      const cmd = buildInstallCommand(pm, pkgs, globalInstall);
 
       console.log(`Installing local deps with: ${cmd}`);
+      if (globalInstall) {
+        console.log("Detected global CLI install; installing dependencies globally.");
+      }
       try {
         execSync(cmd, { stdio: "inherit" });
         console.log("Local dependencies installed. You can now run in local mode.");
@@ -1380,67 +1311,4 @@ async function runCli(argv: string[]) {
     });
 
   await program.parseAsync(argv);
-}
-
-async function callContext7Tool(
-  name: "get-library-docs",
-  args: Record<string, unknown>,
-  apiKey: string | undefined,
-  endpoint = "https://mcp.context7.com/mcp"
-): Promise<string> {
-  type Context7Content = { type?: string; text?: string };
-  type Context7Response = {
-    result?: { content?: Context7Content[] };
-    error?: { message?: string };
-  };
-
-  const resolvedEndpoint = process.env.CONTEXT7_ENDPOINT || endpoint;
-
-  const body = {
-    jsonrpc: "2.0",
-    id: "1",
-    method: "tools/call",
-    params: {
-      name,
-      arguments: args,
-    },
-  };
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json, text/event-stream",
-  };
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-  }
-
-  const res = await fetch(resolvedEndpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Context7 request failed with status ${res.status}`);
-  }
-
-  const json = (await res.json()) as Context7Response;
-  if (json.error) {
-    throw new Error(json.error?.message || "Context7 returned an error");
-  }
-
-  const text =
-    json.result?.content?.find(
-      (content): content is Context7Content & { text: string } =>
-        content.type === "text" && typeof content.text === "string"
-    )?.text ??
-    json.result?.content?.find(
-      (content): content is Context7Content & { text: string } => typeof content.text === "string"
-    )?.text;
-
-  if (!text) {
-    throw new Error("Context7 response did not include text content");
-  }
-
-  return text as string;
 }
