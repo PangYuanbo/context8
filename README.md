@@ -1,5 +1,3 @@
-![Cover](public/cover.png)
-
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=context8&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvbnRleHQ4LW1jcCJdfQ%3D%3D) [<img alt="Install in VS Code (npx)" src="https://img.shields.io/badge/Install%20in%20VS%20Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%7B%22name%22%3A%22context8%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22context8-mcp%22%5D%7D)
 
 # Context8 MCP - Local Error Solution Vault
