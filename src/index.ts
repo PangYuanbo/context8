@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, realpathSync } from "fs";
 import { join, resolve, sep } from "path";
 import { execSync } from "child_process";
 import { Command } from "commander";
@@ -99,12 +99,35 @@ function getInstallationPaths(): {
   return { currentExecutable, globalInstall, npmGlobalRoot };
 }
 
-function isGlobalCliInstall(paths: { currentExecutable: string; npmGlobalRoot: string | null }): boolean {
+function isGlobalCliInstall(paths: {
+  currentExecutable: string;
+  globalInstall: string | null;
+  npmGlobalRoot: string | null;
+}): boolean {
   if (!paths.npmGlobalRoot) return false;
   const normalizedRoot = resolve(paths.npmGlobalRoot);
-  const normalizedExec = resolve(paths.currentExecutable);
   const rootWithSep = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
-  return normalizedExec === normalizedRoot || normalizedExec.startsWith(rootWithSep);
+  const candidates = [paths.currentExecutable, paths.globalInstall].filter(
+    (value): value is string => Boolean(value)
+  );
+
+  for (const candidate of candidates) {
+    const resolved = resolve(candidate);
+    if (resolved === normalizedRoot || resolved.startsWith(rootWithSep)) {
+      return true;
+    }
+    try {
+      const real = realpathSync(candidate);
+      const normalizedReal = resolve(real);
+      if (normalizedReal === normalizedRoot || normalizedReal.startsWith(rootWithSep)) {
+        return true;
+      }
+    } catch {
+      // Ignore missing path or lack of permissions.
+    }
+  }
+
+  return false;
 }
 
 function buildInstallCommand(pm: string, pkgs: string[], globalInstall: boolean): string {
