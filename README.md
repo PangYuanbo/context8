@@ -633,7 +633,13 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
    npm install -g context8-mcp
    ```
 
-2. **Get your config paths:**
+2. **Add via Codex CLI (one-liner):**
+
+   ```bash
+   codex mcp add context8 -- context8-mcp
+   ```
+
+3. **Get your config paths:**
 
    ```bash
    context8-mcp diagnose
@@ -641,7 +647,7 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
 
    This will show ready-to-copy config snippets for both recommended and alternative setups!
 
-3. **Add to your Codex config** (copy from diagnose output):
+4. **Add to your Codex config** (copy from diagnose output):
 
    ```toml
    [mcp_servers.context8]
@@ -653,6 +659,12 @@ Open Claude Desktop developer settings and edit your `claude_desktop_config.json
    This is the cleanest approach—no environment variables needed in the config file.
 
 ### Option 1: npx (remote mode)
+
+```bash
+codex mcp add context8 --env CONTEXT8_REMOTE_API_KEY=YOUR_API_KEY -- npx -y context8-mcp
+```
+
+Or add it manually:
 
 ```toml
 [mcp_servers.context8]
