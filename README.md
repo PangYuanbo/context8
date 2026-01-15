@@ -246,6 +246,12 @@ claude mcp add context8 \
   -- npx -y context8-mcp
 ```
 
+You can also use the short env flag:
+
+```sh
+claude mcp add -e CONTEXT8_REMOTE_API_KEY=<your-api-key> context8 -- npx -y context8-mcp
+```
+
 > **Note:** The remote URL defaults to `https://api.context8.org` - you only need to set `CONTEXT8_REMOTE_API_KEY`!
 >
 > API key must be created via https://www.context8.org (email-verified user). Omit the env flags to run local-only.
