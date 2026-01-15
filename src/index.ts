@@ -32,6 +32,8 @@ const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.u
 type LocalDbModule = typeof import("./lib/database.js");
 
 let localDbModulePromise: Promise<LocalDbModule> | null = null;
+let recentSearchCache: SolutionSearchResult[] = [];
+let recentSearchUpdatedAt: string | null = null;
 
 async function loadLocalDbModule(): Promise<LocalDbModule> {
   if (!localDbModulePromise) {
@@ -260,24 +262,48 @@ function buildConfigSnapshot(): Record<string, unknown> {
       remoteUrl: envUrl ?? null,
       apiKey: maskApiKey(envKey),
     },
+    recentSearch: {
+      cached: recentSearchCache.length > 0,
+      updatedAt: recentSearchUpdatedAt,
+      count: recentSearchCache.length,
+    },
   };
+}
+
+function formatRecentLines(items: SolutionSearchResult[]): string {
+  return items
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.title} | ${item.errorType} | ${item.tags.join(", ")} | ${item.createdAt} | ${item.id}`
+    )
+    .join("\n");
+}
+
+function buildRecentCacheSummary(limit: number): string | null {
+  if (recentSearchCache.length === 0) return null;
+  const slice = recentSearchCache.slice(0, limit);
+  const header = recentSearchUpdatedAt
+    ? `Recent search cache (${recentSearchUpdatedAt}):`
+    : "Recent search cache:";
+  return [header, formatRecentLines(slice)].join("\n");
 }
 
 async function buildRecentSummary(
   limit: number,
   remoteConfig: ReturnType<typeof resolveRemoteConfig>
 ): Promise<string> {
+  const cached = buildRecentCacheSummary(limit);
+  if (cached) {
+    return cached;
+  }
+
   if (remoteConfig) {
     try {
       const items = await remoteListSolutions(remoteConfig, limit, 0);
       if (items.length === 0) {
         return "No remote solutions found or remote list not supported.";
       }
-      const lines = items.map(
-        (item, index) =>
-          `${index + 1}. ${item.title} | ${item.errorType} | ${item.tags.join(", ")} | ${item.createdAt} | ${item.id}`
-      );
-      return lines.join("\n");
+      return formatRecentLines(items);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `Failed to read remote solutions: ${message}`;
@@ -290,11 +316,7 @@ async function buildRecentSummary(
     if (items.length === 0) {
       return "No local solutions found.";
     }
-    const lines = items.map(
-      (item, index) =>
-        `${index + 1}. ${item.title} | ${item.errorType} | ${item.tags.join(", ")} | ${item.createdAt} | ${item.id}`
-    );
-    return lines.join("\n");
+    return formatRecentLines(items);
   } catch (error) {
     if (isMissingLocalDeps(error)) {
       return [
@@ -701,6 +723,8 @@ After reviewing the results, use 'batch-get-solutions' to retrieve full details 
           });
           totalCount = await db.getSolutionCount();
         }
+        recentSearchCache = results;
+        recentSearchUpdatedAt = new Date().toISOString();
 
         if (results.length === 0) {
           return {
