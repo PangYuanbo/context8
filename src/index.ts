@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { existsSync, readFileSync, realpathSync } from "fs";
@@ -224,6 +224,68 @@ function versionIssues(env: Record<string, unknown> | undefined): { warnings: st
   return { warnings };
 }
 
+function buildAboutText(): string {
+  return [
+    "Context8 is a cloud-first error solution vault for Vibe Coding agents.",
+    "Store fixes with context, search fast, and share solutions with the community.",
+    "Local storage is optional; remote mode is the recommended default.",
+  ].join("\n");
+}
+
+function buildInstructionsText(): string {
+  return [
+    "Resources are read-only and safe to consume without side effects.",
+    "Use tools to save, search, or delete solutions.",
+    "Avoid sharing secrets: redact API keys, tokens, passwords, and personal data.",
+    "Prefer concise, versioned context so solutions stay reusable.",
+  ].join("\n");
+}
+
+function buildConfigSnapshot(): Record<string, unknown> {
+  const saved = loadConfig();
+  const envUrl = process.env.CONTEXT8_REMOTE_URL;
+  const envKey = process.env.CONTEXT8_REMOTE_API_KEY;
+  const resolved = resolveRemoteConfig();
+
+  return {
+    mode: resolved ? "remote" : "local",
+    configPath: getConfigPath(),
+    resolved: resolved ? { baseUrl: resolved.baseUrl, apiKey: maskApiKey(resolved.apiKey) } : null,
+    saved: {
+      remoteUrl: saved.remoteUrl ?? null,
+      apiKey: maskApiKey(saved.apiKey),
+    },
+    env: {
+      remoteUrl: envUrl ?? null,
+      apiKey: maskApiKey(envKey),
+    },
+  };
+}
+
+async function buildRecentSummary(limit: number): Promise<string> {
+  try {
+    const db = await loadLocalDbModule();
+    const items = await db.listSolutions(limit, 0);
+    if (items.length === 0) {
+      return "No local solutions found.";
+    }
+    const lines = items.map(
+      (item, index) =>
+        `${index + 1}. ${item.title} | ${item.errorType} | ${item.tags.join(", ")} | ${item.createdAt} | ${item.id}`
+    );
+    return lines.join("\n");
+  } catch (error) {
+    if (isMissingLocalDeps(error)) {
+      return [
+        "Local mode dependencies are missing.",
+        "Run `context8-mcp setup-local` or use remote mode with CONTEXT8_REMOTE_API_KEY.",
+      ].join("\n");
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return `Failed to read local solutions: ${message}`;
+  }
+}
+
 // Function to create a new server instance with all Context8 tools registered
 function createServerInstance() {
   const remoteConfig = resolveRemoteConfig();
@@ -235,7 +297,102 @@ function createServerInstance() {
     },
     {
       instructions:
-        "Use this server to save and retrieve error solutions from your local knowledge base. All solutions are stored locally with privacy-first design and semantic search capabilities.",
+        "Use this server to save and retrieve error solutions with a cloud-first workflow and optional local storage. Remote mode syncs with the community vault; local mode keeps data on-device.",
+    }
+  );
+
+  server.registerResource(
+    "context8-about",
+    "context8://about",
+    {
+      title: "Context8 Overview",
+      description: "Cloud-first error solution vault overview",
+      mimeType: "text/plain",
+    },
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          text: buildAboutText(),
+        },
+      ],
+    })
+  );
+
+  server.registerResource(
+    "context8-instructions",
+    "context8://instructions",
+    {
+      title: "Context8 Instructions",
+      description: "Usage, privacy, and safety guidelines",
+      mimeType: "text/plain",
+    },
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          text: buildInstructionsText(),
+        },
+      ],
+    })
+  );
+
+  server.registerResource(
+    "context8-config",
+    "context8://config",
+    {
+      title: "Context8 Configuration",
+      description: "Resolved mode and configuration snapshot (redacted)",
+      mimeType: "application/json",
+    },
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          text: JSON.stringify(buildConfigSnapshot(), null, 2),
+        },
+      ],
+    })
+  );
+
+  server.registerResource(
+    "context8-recent",
+    "context8://recent",
+    {
+      title: "Recent Solutions",
+      description: "Recent local solutions (default limit 10)",
+      mimeType: "text/plain",
+    },
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          text: await buildRecentSummary(10),
+        },
+      ],
+    })
+  );
+
+  server.registerResource(
+    "context8-recent-limit",
+    new ResourceTemplate("context8://recent/{limit}", { list: undefined }),
+    {
+      title: "Recent Solutions (Custom Limit)",
+      description: "Recent local solutions with a custom limit",
+      mimeType: "text/plain",
+    },
+    async (uri, { limit }) => {
+      const parsed = typeof limit === "string" ? parseInt(limit, 10) : Number(limit);
+      const safeLimit =
+        Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.max(parsed, 1), 50) : 10;
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            text: await buildRecentSummary(safeLimit),
+          },
+        ],
+      };
     }
   );
 
