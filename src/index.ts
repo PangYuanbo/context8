@@ -15,6 +15,7 @@ import {
   remoteGetSolutionById,
   remoteGetSolutionsByIds,
   remoteDeleteSolution,
+  remoteListSolutions,
 } from "./lib/remoteClient.js";
 import { clearConfig, getConfigPath, loadConfig, saveConfig } from "./lib/config.js";
 import {
@@ -262,7 +263,27 @@ function buildConfigSnapshot(): Record<string, unknown> {
   };
 }
 
-async function buildRecentSummary(limit: number): Promise<string> {
+async function buildRecentSummary(
+  limit: number,
+  remoteConfig: ReturnType<typeof resolveRemoteConfig>
+): Promise<string> {
+  if (remoteConfig) {
+    try {
+      const items = await remoteListSolutions(remoteConfig, limit, 0);
+      if (items.length === 0) {
+        return "No remote solutions found or remote list not supported.";
+      }
+      const lines = items.map(
+        (item, index) =>
+          `${index + 1}. ${item.title} | ${item.errorType} | ${item.tags.join(", ")} | ${item.createdAt} | ${item.id}`
+      );
+      return lines.join("\n");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `Failed to read remote solutions: ${message}`;
+    }
+  }
+
   try {
     const db = await loadLocalDbModule();
     const items = await db.listSolutions(limit, 0);
@@ -360,14 +381,14 @@ function createServerInstance() {
     "context8://recent",
     {
       title: "Recent Solutions",
-      description: "Recent local solutions (default limit 10)",
+      description: "Recent solutions (remote if configured, otherwise local)",
       mimeType: "text/plain",
     },
     async (uri) => ({
       contents: [
         {
           uri: uri.href,
-          text: await buildRecentSummary(10),
+          text: await buildRecentSummary(10, remoteConfig),
         },
       ],
     })
@@ -378,7 +399,7 @@ function createServerInstance() {
     new ResourceTemplate("context8://recent/{limit}", { list: undefined }),
     {
       title: "Recent Solutions (Custom Limit)",
-      description: "Recent local solutions with a custom limit",
+      description: "Recent solutions with a custom limit (remote if configured)",
       mimeType: "text/plain",
     },
     async (uri, { limit }) => {
@@ -389,7 +410,7 @@ function createServerInstance() {
         contents: [
           {
             uri: uri.href,
-            text: await buildRecentSummary(safeLimit),
+            text: await buildRecentSummary(safeLimit, remoteConfig),
           },
         ],
       };

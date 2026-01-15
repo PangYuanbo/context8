@@ -144,6 +144,54 @@ export async function remoteSearchSolutions(
   return data.results;
 }
 
+export async function remoteListSolutions(
+  config: RemoteConfig,
+  limit = 10,
+  offset = 0
+): Promise<SolutionSearchResult[]> {
+  const fetchImpl = requireFetch();
+  const res = await withTimeout(
+    fetchImpl(
+      `${config.baseUrl}/solutions?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(
+        offset
+      )}`,
+      {
+        headers: headers(config.apiKey),
+      }
+    )
+  );
+
+  if (res.ok) {
+    const data = (await res.json()) as Array<ErrorSolution | SolutionSearchResult>;
+    return data.map((item) => ({
+      id: item.id,
+      title: item.title,
+      errorType: item.errorType,
+      tags: item.tags,
+      createdAt: item.createdAt,
+      score: "score" in item ? item.score : undefined,
+      similarity: "similarity" in item ? item.similarity : undefined,
+      preview: "preview" in item ? item.preview : undefined,
+    }));
+  }
+
+  if (res.status !== 404 && res.status !== 405) {
+    throw new Error(`Remote list failed: ${await parseError(res)}`);
+  }
+
+  try {
+    return await remoteSearchSolutions(config, " ", limit, { mode: "sparse" });
+  } catch {
+    try {
+      return await remoteSearchSolutions(config, "recent", limit, { mode: "sparse" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Remote list fallback failed: ${message}`);
+      return [];
+    }
+  }
+}
+
 async function legacyCountViaSearch(config: RemoteConfig): Promise<number> {
   const fetchImpl = requireFetch();
   // Approximate count via keyword search; may be off but avoids throwing.
