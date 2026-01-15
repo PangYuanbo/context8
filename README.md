@@ -1349,6 +1349,7 @@ Context8 MCP runs as a stdio MCP server when invoked without arguments. The foll
 - `context8-mcp list` – List recent solutions (see CLI Usage section above)
 - `context8-mcp search "<query>" [--limit N --mode hybrid|semantic|sparse]` – Search locally or remotely (if configured)
 - `context8-mcp delete <id>` – Delete a solution by ID
+- `context8-mcp setup-clients [--mode remote|local --api-key <key> --scope local|user|project --clients codex,claude --dry-run]` – Install Context8 MCP into supported clients using their CLI commands
 - `context8-mcp push-remote` – Upload all local solutions to a remote Context8 server (uses saved/env remote config)
 - `context8-mcp update` – Run database migrations and check for package updates
 - `context8-mcp setup-local` – Install optional local dependencies (better-sqlite3, @xenova/transformers)

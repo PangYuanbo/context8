@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { existsSync, readFileSync, realpathSync } from "fs";
 import { join, resolve, sep } from "path";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { Command } from "commander";
 import { ErrorType } from "./lib/types.js";
 import {
@@ -100,6 +100,30 @@ function getInstallationPaths(): {
   }
 
   return { currentExecutable, globalInstall, npmGlobalRoot };
+}
+
+function resolveCliPath(bin: string): string | null {
+  try {
+    const whichCmd = process.platform === "win32" ? "where" : "which";
+    const result = execSync(`${whichCmd} ${bin}`, { encoding: "utf-8" }).trim();
+    if (!result) return null;
+    return result.split("\n")[0];
+  } catch {
+    return null;
+  }
+}
+
+function formatCommand(bin: string, args: string[]): string {
+  const quote = (value: string) => (/\s|["'$]/.test(value) ? JSON.stringify(value) : value);
+  return [bin, ...args].map(quote).join(" ");
+}
+
+function runCommand(bin: string, args: string[], dryRun: boolean): boolean {
+  const display = formatCommand(bin, args);
+  console.log(display);
+  if (dryRun) return true;
+  const result = spawnSync(bin, args, { stdio: "inherit" });
+  return result.status === 0;
 }
 
 function isGlobalCliInstall(paths: {
@@ -1346,6 +1370,119 @@ async function runCli(argv: string[]) {
             error instanceof Error ? error.message : String(error)
           }`
         );
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("setup-clients")
+    .description("Install Context8 MCP into supported clients via their CLI commands")
+    .option("--mode <mode>", "remote | local (default: remote)", "remote")
+    .option("--api-key <key>", "API key for remote mode (defaults to CONTEXT8_REMOTE_API_KEY)")
+    .option("--scope <scope>", "Claude scope: local | user | project", "local")
+    .option("--clients <names>", "Comma-separated client list (codex,claude)")
+    .option("--dry-run", "Print commands without executing")
+    .action(async (opts) => {
+      const mode = opts.mode === "local" ? "local" : "remote";
+      const apiKey = opts.apiKey || process.env.CONTEXT8_REMOTE_API_KEY;
+      if (mode === "remote" && !apiKey) {
+        console.error("Remote mode requires an API key. Set --api-key or CONTEXT8_REMOTE_API_KEY.");
+        process.exitCode = 1;
+        return;
+      }
+
+      const requested =
+        typeof opts.clients === "string" && opts.clients.length > 0
+          ? opts.clients
+              .split(",")
+              .map((c: string) => c.trim().toLowerCase())
+              .filter(Boolean)
+          : null;
+
+      const targets = [
+        {
+          name: "codex",
+          bin: "codex",
+          build: () => {
+            if (mode === "remote") {
+              return {
+                args: [
+                  "mcp",
+                  "add",
+                  "context8",
+                  "--env",
+                  `CONTEXT8_REMOTE_API_KEY=${apiKey}`,
+                  "--",
+                  "npx",
+                  "-y",
+                  "context8-mcp",
+                ],
+              };
+            }
+            return {
+              args: ["mcp", "add", "context8", "--", "context8-mcp"],
+            };
+          },
+        },
+        {
+          name: "claude",
+          bin: "claude",
+          build: () => {
+            const scope = typeof opts.scope === "string" ? opts.scope : "local";
+            if (mode === "remote") {
+              return {
+                args: [
+                  "mcp",
+                  "add",
+                  "--scope",
+                  scope,
+                  "-e",
+                  `CONTEXT8_REMOTE_API_KEY=${apiKey}`,
+                  "context8",
+                  "--",
+                  "npx",
+                  "-y",
+                  "context8-mcp",
+                ],
+              };
+            }
+            return {
+              args: ["mcp", "add", "--scope", scope, "context8", "--", "context8-mcp"],
+            };
+          },
+        },
+      ];
+
+      const results = {
+        installed: 0,
+        skipped: 0,
+        failed: 0,
+      };
+
+      for (const target of targets) {
+        if (requested && !requested.includes(target.name)) {
+          continue;
+        }
+        const resolved = resolveCliPath(target.bin);
+        if (!resolved) {
+          console.log(`Skipping ${target.name}: command not found.`);
+          results.skipped += 1;
+          continue;
+        }
+        console.log(`Installing into ${target.name}:`);
+        const { args } = target.build();
+        const ok = runCommand(resolved, args, Boolean(opts.dryRun));
+        if (ok) {
+          results.installed += 1;
+        } else {
+          results.failed += 1;
+        }
+      }
+
+      console.log(
+        `Done. installed=${results.installed}, skipped=${results.skipped}, failed=${results.failed}.`
+      );
+      if (results.failed > 0) {
         process.exitCode = 1;
       }
     });
