@@ -7,7 +7,7 @@ import { existsSync, readFileSync, realpathSync } from "fs";
 import { join, resolve, sep } from "path";
 import { execSync, spawnSync } from "child_process";
 import { Command } from "commander";
-import { ErrorType } from "./lib/types.js";
+import { ErrorType, SolutionSearchResult } from "./lib/types.js";
 import {
   remoteSaveSolution,
   remoteSearchSolutions,
@@ -30,6 +30,11 @@ import {
 const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 
 type LocalDbModule = typeof import("./lib/database.js");
+type ClientInstallPlan = {
+  args: string[];
+  env?: Record<string, string>;
+  note?: string;
+};
 
 let localDbModulePromise: Promise<LocalDbModule> | null = null;
 let recentSearchCache: SolutionSearchResult[] = [];
@@ -1414,7 +1419,11 @@ async function runCli(argv: string[]) {
               .filter(Boolean)
           : null;
 
-      const targets = [
+      const targets: Array<{
+        name: string;
+        bin: string;
+        build: () => ClientInstallPlan;
+      }> = [
         {
           name: "codex",
           bin: "codex",
