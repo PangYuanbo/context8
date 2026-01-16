@@ -118,11 +118,19 @@ function formatCommand(bin: string, args: string[]): string {
   return [bin, ...args].map(quote).join(" ");
 }
 
-function runCommand(bin: string, args: string[], dryRun: boolean): boolean {
+function runCommand(
+  bin: string,
+  args: string[],
+  dryRun: boolean,
+  env?: Record<string, string>
+): boolean {
   const display = formatCommand(bin, args);
   console.log(display);
   if (dryRun) return true;
-  const result = spawnSync(bin, args, { stdio: "inherit" });
+  const result = spawnSync(bin, args, {
+    stdio: "inherit",
+    env: env ? { ...process.env, ...env } : process.env,
+  });
   return result.status === 0;
 }
 
@@ -1451,6 +1459,38 @@ async function runCli(argv: string[]) {
             };
           },
         },
+        {
+          name: "goose",
+          bin: "goose",
+          build: () => {
+            if (mode === "remote") {
+              return {
+                args: ["mcp", "add", "context8", "npx", "-y", "context8-mcp"],
+                env: apiKey ? { CONTEXT8_REMOTE_API_KEY: apiKey } : undefined,
+                note: "Goose does not expose an MCP env flag; ensure CONTEXT8_REMOTE_API_KEY is set in your shell if remote mode does not persist.",
+              };
+            }
+            return {
+              args: ["mcp", "add", "context8", "npx", "-y", "context8-mcp"],
+            };
+          },
+        },
+        {
+          name: "amp",
+          bin: "amp",
+          build: () => {
+            if (mode === "remote") {
+              return {
+                args: ["mcp", "add", "context8", "npx", "-y", "context8-mcp"],
+                env: apiKey ? { CONTEXT8_REMOTE_API_KEY: apiKey } : undefined,
+                note: "Amp does not expose an MCP env flag; ensure CONTEXT8_REMOTE_API_KEY is set in your shell if remote mode does not persist.",
+              };
+            }
+            return {
+              args: ["mcp", "add", "context8", "npx", "-y", "context8-mcp"],
+            };
+          },
+        },
       ];
 
       const results = {
@@ -1470,8 +1510,11 @@ async function runCli(argv: string[]) {
           continue;
         }
         console.log(`Installing into ${target.name}:`);
-        const { args } = target.build();
-        const ok = runCommand(resolved, args, Boolean(opts.dryRun));
+        const { args, env, note } = target.build();
+        if (note) {
+          console.log(note);
+        }
+        const ok = runCommand(resolved, args, Boolean(opts.dryRun), env);
         if (ok) {
           results.installed += 1;
         } else {
