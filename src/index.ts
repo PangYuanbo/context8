@@ -1386,15 +1386,22 @@ async function runCli(argv: string[]) {
     .command("setup-clients")
     .description("Install Context8 MCP into supported clients via their CLI commands")
     .option("--mode <mode>", "remote | local (default: remote)", "remote")
-    .option("--api-key <key>", "API key for remote mode (defaults to CONTEXT8_REMOTE_API_KEY)")
+    .option(
+      "--api-key <key>",
+      "API key for remote mode (defaults to CONTEXT8_REMOTE_API_KEY or saved config)"
+    )
     .option("--scope <scope>", "Claude scope: local | user | project", "local")
     .option("--clients <names>", "Comma-separated client list (codex,claude)")
     .option("--dry-run", "Print commands without executing")
     .action(async (opts) => {
       const mode = opts.mode === "local" ? "local" : "remote";
-      const apiKey = opts.apiKey || process.env.CONTEXT8_REMOTE_API_KEY;
+      const resolvedRemote = resolveRemoteConfig();
+      const apiKey =
+        opts.apiKey || process.env.CONTEXT8_REMOTE_API_KEY || resolvedRemote?.apiKey || undefined;
       if (mode === "remote" && !apiKey) {
-        console.error("Remote mode requires an API key. Set --api-key or CONTEXT8_REMOTE_API_KEY.");
+        console.error(
+          "Remote mode requires an API key. Set --api-key, CONTEXT8_REMOTE_API_KEY, or save one via `context8-mcp remote-config`."
+        );
         process.exitCode = 1;
         return;
       }
