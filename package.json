@@ -1,6 +1,6 @@
 {
   "name": "context8-mcp",
-  "version": "1.0.5",
+  "version": "1.0.5-beta.1",
   "mcpName": "io.context8/server",
   "description": "Context8 MCP server for local error solution knowledge base with semantic search",
   "scripts": {
